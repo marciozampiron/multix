@@ -1,3 +1,10 @@
+// File: internal/domain/auth/models.go
+// Company: Hassan
+// Creator: Zamp
+// Created: 15/03/2026
+// Updated: 15/03/2026
+// Purpose: Defines provider-agnostic authentication models used by skills and adapters.
+
 package auth
 
 import "time"
@@ -22,7 +29,7 @@ type Session struct {
 // ValidationResult represents the outcome of a provider validation check.
 type ValidationResult struct {
 	Provider  string            `json:"provider"`
-	IsValid   bool              `json:"is_valid"`
+	Valid     bool              `json:"valid"`
 	AccountID string            `json:"account_id,omitempty"`
 	Principal string            `json:"principal,omitempty"`
 	Message   string            `json:"message,omitempty"`
@@ -35,7 +42,9 @@ type Identity struct {
 	AccountID     string         `json:"account_id,omitempty"`
 	Principal     string         `json:"principal,omitempty"`
 	PrincipalType string         `json:"principal_type,omitempty"`
+	UserID        string         `json:"user_id,omitempty"`
 	ProjectID     string         `json:"project_id,omitempty"`
 	AuthSource    string         `json:"auth_source,omitempty"`
+	Note          string         `json:"note,omitempty"`
 	Raw           map[string]any `json:"raw,omitempty"`
 }

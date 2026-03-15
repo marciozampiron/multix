@@ -16,7 +16,7 @@ import (
 	domainAuth "multix/internal/domain/auth"
 )
 
-// mockAuthProvider is a test double for outbound.AuthProvider
+// mockAuthProvider is a test double for outbound.AuthProvider.
 type mockAuthProvider struct {
 	id             string
 	validateResult *domainAuth.ValidationResult
@@ -43,7 +43,7 @@ func TestAuthSkills_Execution(t *testing.T) {
 		id: "aws",
 		validateResult: &domainAuth.ValidationResult{
 			Provider:  "aws",
-			IsValid:   true,
+			Valid:     true,
 			AccountID: "12345",
 			Principal: "arn:mock",
 		},
@@ -56,7 +56,7 @@ func TestAuthSkills_Execution(t *testing.T) {
 	}
 	providers.RegisterAuth("aws", mockAWS)
 
-	t.Run("auth.validate execution with known provider", func(t *testing.T) {
+	t.Run("auth.validate execution with explicit provider", func(t *testing.T) {
 		skill := auth.NewValidateSkill(providers)
 		input := map[string]any{"provider": "aws"}
 
@@ -66,12 +66,12 @@ func TestAuthSkills_Execution(t *testing.T) {
 		}
 
 		result, ok := res.(*domainAuth.ValidationResult)
-		if !ok || result.Provider != "aws" || !result.IsValid {
+		if !ok || result.Provider != "aws" || !result.Valid {
 			t.Errorf("expected valid aws ValidationResult, got %+v", res)
 		}
 	})
 
-	t.Run("auth.whoami execution with known provider", func(t *testing.T) {
+	t.Run("auth.whoami execution with explicit provider", func(t *testing.T) {
 		skill := auth.NewWhoamiSkill(providers)
 		input := map[string]any{"provider": "aws"}
 
@@ -86,8 +86,32 @@ func TestAuthSkills_Execution(t *testing.T) {
 		}
 	})
 
+	t.Run("auth.validate falls back to default provider when omitted", func(t *testing.T) {
+		skill := auth.NewValidateSkill(providers)
+
+		res, err := skill.Execute(context.Background(), map[string]any{})
+		if err != nil {
+			t.Fatalf("unexpected error with default provider: %v", err)
+		}
+
+		result := res.(*domainAuth.ValidationResult)
+		if result.Provider != "aws" {
+			t.Fatalf("expected default provider aws, got %q", result.Provider)
+		}
+	})
+
 	t.Run("auth.validate with unknown provider returns error", func(t *testing.T) {
 		skill := auth.NewValidateSkill(providers)
+		input := map[string]any{"provider": "unknown"}
+
+		_, err := skill.Execute(context.Background(), input)
+		if err == nil {
+			t.Fatal("expected error for unknown provider, got nil")
+		}
+	})
+
+	t.Run("auth.whoami with unknown provider returns error", func(t *testing.T) {
+		skill := auth.NewWhoamiSkill(providers)
 		input := map[string]any{"provider": "unknown"}
 
 		_, err := skill.Execute(context.Background(), input)

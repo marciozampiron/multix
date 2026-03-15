@@ -1,3 +1,10 @@
+// File: internal/adapters/outbound/cloud/aws/adapter.go
+// Company: Hassan
+// Creator: Zamp
+// Created: 15/03/2026
+// Updated: 15/03/2026
+// Purpose: Implements AWS provider adapters, including real auth validation and identity via STS.
+
 package aws
 
 import (
@@ -47,70 +54,91 @@ func (a *adapter) ID() string {
 	return "aws"
 }
 
-// AuthProvider Implementations
+// Login implements the AuthProvider contract for legacy login compatibility.
 func (a *adapter) Login(ctx context.Context, creds auth.Credentials) (*auth.Session, error) {
 	a.logger.Info("Logging in to AWS (stub)")
 	return &auth.Session{Provider: "aws", IsValid: true}, nil
 }
 
+// Whoami returns the active AWS identity using STS GetCallerIdentity.
 func (a *adapter) Whoami(ctx context.Context) (*auth.Identity, error) {
 	a.logger.Info("Retrieving AWS caller identity")
-	client, err := a.stsClientFunc(ctx)
+	out, err := a.getCallerIdentity(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("aws config error: %w", err)
+		return nil, err
 	}
 
-	out, err := client.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
-	if err != nil {
-		return nil, fmt.Errorf("aws sts error: %w", err)
-	}
-
-	principalType := "unknown"
-	arn := *out.Arn
-	if strings.Contains(arn, ":user/") {
-		principalType = "user"
-	} else if strings.Contains(arn, ":assumed-role/") {
-		principalType = "assumed-role"
-	}
-
-	return &auth.Identity{
-		Provider:      "aws",
-		AccountID:     *out.Account,
-		Principal:     arn,
-		PrincipalType: principalType,
-	}, nil
+	identity := mapAWSIdentity(out)
+	return &identity, nil
 }
 
+// Validate validates AWS credentials using STS GetCallerIdentity.
 func (a *adapter) Validate(ctx context.Context) (*auth.ValidationResult, error) {
 	a.logger.Info("Validating AWS credentials via STS")
+	out, err := a.getCallerIdentity(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	identity := mapAWSIdentity(out)
+	return &auth.ValidationResult{
+		Provider:  "aws",
+		Valid:     true,
+		AccountID: identity.AccountID,
+		Principal: identity.Principal,
+		Message:   "AWS credentials are valid",
+		Details: map[string]string{
+			"arn":            identity.Principal,
+			"principal_type": identity.PrincipalType,
+		},
+	}, nil
+}
+
+func (a *adapter) getCallerIdentity(ctx context.Context) (*sts.GetCallerIdentityOutput, error) {
 	client, err := a.stsClientFunc(ctx)
 	if err != nil {
-		return &auth.ValidationResult{
-			Provider: "aws",
-			IsValid:  false,
-			Message:  fmt.Sprintf("failed to load aws config: %v", err),
-		}, nil
+		return nil, fmt.Errorf("failed to load AWS config/credentials; run 'aws configure' or 'aws sso login': %w", err)
 	}
 
 	out, err := client.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
 	if err != nil {
-		return &auth.ValidationResult{
-			Provider: "aws",
-			IsValid:  false,
-			Message:  fmt.Sprintf("failed GetCallerIdentity: %v", err),
-		}, nil
+		return nil, fmt.Errorf("failed AWS STS GetCallerIdentity; verify credentials/session are active: %w", err)
 	}
-
-	return &auth.ValidationResult{
-		Provider:  "aws",
-		IsValid:   true,
-		AccountID: *out.Account,
-		Principal: *out.Arn,
-		Message:   "AWS credentials are valid",
-	}, nil
+	return out, nil
 }
 
-// InventoryProvider Implementations
+func mapAWSIdentity(out *sts.GetCallerIdentityOutput) auth.Identity {
+	arn := awsString(out.Arn)
+	return auth.Identity{
+		Provider:      "aws",
+		AccountID:     awsString(out.Account),
+		Principal:     arn,
+		PrincipalType: inferAWSPrincipalType(arn),
+		UserID:        awsString(out.UserId),
+	}
+}
+
+func inferAWSPrincipalType(arn string) string {
+	switch {
+	case strings.Contains(arn, ":assumed-role/"):
+		return "role"
+	case strings.Contains(arn, ":role/"):
+		return "role"
+	case strings.Contains(arn, ":user/"):
+		return "user"
+	default:
+		return "unknown"
+	}
+}
+
+func awsString(v *string) string {
+	if v == nil {
+		return ""
+	}
+	return *v
+}
+
+// List returns AWS inventory resources.
 func (a *adapter) List(ctx context.Context, resourceType string) ([]*inventory.Resource, error) {
 	a.logger.Info("Listing AWS inventory resources", "type", resourceType)
 	return []*inventory.Resource{
@@ -118,12 +146,13 @@ func (a *adapter) List(ctx context.Context, resourceType string) ([]*inventory.R
 	}, nil
 }
 
+// Scan summarizes AWS inventory resources.
 func (a *adapter) Scan(ctx context.Context) (*inventory.Summary, error) {
 	a.logger.Info("Scanning entire AWS account inventory")
 	return &inventory.Summary{ProviderName: "aws", Total: 15, CountByType: map[string]int{"EC2": 10, "S3": 5}}, nil
 }
 
-// K8sProvider Implementations
+// ListClusters returns EKS clusters.
 func (a *adapter) ListClusters(ctx context.Context) ([]*k8s.Cluster, error) {
 	a.logger.Info("Listing EKS clusters", "region", "us-east-1")
 	return []*k8s.Cluster{
@@ -131,6 +160,7 @@ func (a *adapter) ListClusters(ctx context.Context) ([]*k8s.Cluster, error) {
 	}, nil
 }
 
+// SyncContext syncs EKS context to kubeconfig.
 func (a *adapter) SyncContext(ctx context.Context, clusterName, region string) error {
 	a.logger.Info("Generating kubeconfig for EKS cluster", "cluster", clusterName)
 	return nil

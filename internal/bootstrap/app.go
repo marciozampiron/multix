@@ -35,6 +35,7 @@ func BuildApp() (*App, error) {
 	cfg := LoadConfig()
 	log := logger.New("info")
 	rootCmd := root.NewRootCmd()
+	applyRuntimeDefaults(rootCmd, cfg)
 
 	providers := BuildProviderRegistry(log)
 	skillRegistry := BuildSkillRegistry(providers)
@@ -66,4 +67,9 @@ func (a *App) Wire() *cobra.Command {
 
 	root.RegisterVersionCmd(a.RootCmd)
 	return a.RootCmd
+}
+
+func applyRuntimeDefaults(rootCmd *cobra.Command, cfg *config.Config) {
+	_ = rootCmd.PersistentFlags().Set("provider", cfg.DefaultCloudProvider)
+	_ = rootCmd.PersistentFlags().Set("output", cfg.DefaultOutputMode)
 }
