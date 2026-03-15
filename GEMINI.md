@@ -1,127 +1,187 @@
-You are working inside the Multix repository.
+# GEMINI.md — Multix Repository Instructions
 
-Upgrade the current scaffold from v0.1 to v0.2 while preserving the existing skills-first and agent-ready architecture.
+You are working inside the **Multix** repository.
 
-IMPORTANT:
-- Make minimal, coherent changes.
-- Do not rewrite the whole repository.
-- Keep the current structure and improve it incrementally.
-- Respect GEMINI.md and all .agent/*.md rules.
+Multix is a **skills-first, agent-ready, multi-cloud CLI** written in Go, focused on:
+- DevOps
+- Cloud Engineering
+- Kubernetes
+- AI-assisted workflows
+- reusable skills for future AI agents
 
-## Goals for v0.2
+This repository must remain:
+- idiomatic Go
+- modular
+- fast to start
+- low-overhead
+- easy to evolve
+- open-source product quality
 
-Implement the following improvements:
+---
 
-### 1. Provider Registry
-Replace "default provider" assumptions with explicit registries.
+## 1. Core Product Vision
 
-Create a provider registry layer that supports:
-- cloud auth providers
-- cloud inventory providers
-- kubernetes providers
-- AI providers
+Multix is not just a CLI.
+It is a **platform of reusable capabilities ("skills")** that can be consumed by:
+- CLI commands
+- future API endpoints
+- future AI agents / tool-calling
+- future MCP-compatible adapters
 
-Required methods:
-- GetCloudAuthProvider(name string)
-- GetCloudInventoryProvider(name string)
-- GetKubernetesProvider(name string)
-- GetAIProvider(name string)
+### Golden Rule
+- **Agent thinks**
+- **Skill executes**
 
-Support at least:
-- aws
-- gcp
-- gemini
+The agent must never own the business logic.
+Business logic belongs to:
+- domain
+- application/use cases
+- reusable skills
 
-### 2. Command Flags
-Add `--provider` flag to relevant commands:
-- auth validate
-- auth whoami
-- inventory scan
-- inventory summary
-- k8s list-clusters
-- ai explain
-- ai terraform
+---
 
-Provider defaults:
-- cloud default: aws
-- ai default: gemini
+## 2. Mandatory Architectural Rules
 
-### 3. Output Modes
-Add `--output` flag with support for:
-- json (default)
-- table
+### 2.1 Skills-first architecture
+Organize the repository by **SKILLS / CAPABILITIES**, not by cloud provider.
 
-Create a rendering helper in:
-- `internal/adapters/inbound/cli/render.go`
+Correct:
+- `doctor`
+- `auth`
+- `inventory`
+- `k8s`
+- `ai`
+- `plugin`
 
-Keep rendering out of use cases and out of skill logic.
+Wrong:
+- organizing the entire project around `aws/`, `gcp/`, `azure/` as the primary axis
 
-### 4. Config Bootstrap
-Create an initial config bootstrap:
-- `internal/bootstrap/config.go`
-- `internal/domain/config/config.go`
+Cloud providers and AI providers must live behind:
+- ports/interfaces
+- adapters
+- explicit wiring
 
-Support:
-- app name
-- version
-- default cloud provider
-- default ai provider
-- default output mode
+### 2.2 Layering rules
+Use this mental model:
 
-Use a simple in-memory/default config for now.
-Do NOT add Viper yet.
+CLI / API / Agent
+→ Skill / Capability / Tool
+→ Application Use Case
+→ Port (interface)
+→ Adapter / Provider
+→ External system (AWS, GCP, Gemini, etc.)
 
-### 5. Skill Input Support
-Update skill execution so that provider can be passed in input maps where relevant.
+### 2.3 Go layout rules
+Use idiomatic Go repository structure:
+- `cmd/` for executable entrypoints
+- `internal/` for non-exported implementation
+- `internal/application/` for use cases
+- `internal/ports/` for contracts
+- `internal/adapters/` for inbound/outbound integrations
+- `internal/bootstrap/` for explicit wiring
+- avoid `pkg/` unless there is a strong reason
 
-Example:
-- `auth.validate` input can include `provider`
-- `inventory.scan` input can include `provider`
-- `k8s.list_clusters` input can include `provider`
-- `ai.explain` input can include `provider`
+---
 
-### 6. Registry-Aware Skill Wiring
-Refactor `bootstrap/skills.go` so that skills can dynamically resolve providers based on input, using the provider registry, rather than using only default providers.
+## 3. Controlled Change Rule (Mandatory)
 
-### 7. Agent Adapter Base
-Create:
-- `internal/adapters/inbound/agent/tool_adapter.go`
-- `internal/adapters/inbound/agent/manifest.go`
+For non-trivial repository upgrades:
+- audit first
+- propose a minimal change plan
+- prefer patch-style evolution
+- avoid redesign unless explicitly requested
+- implementation should happen only after plan approval
 
-This layer should:
-- expose all registered skills as tool-like manifests
-- provide a method to execute a skill by name and input
-- stay decoupled from Gemini/OpenAI specifics
-- prepare for future MCP integration
+For upgrade tasks:
+1. inspect the current repository
+2. map what already exists
+3. identify the smallest possible delta
+4. prefer modifying existing files over creating new files
+5. avoid moving files unless strictly necessary
+6. avoid renaming packages unless strictly necessary
+7. avoid duplicate abstractions
+8. preserve package names and import paths whenever possible
 
-### 8. Tests
-Add or update tests for:
-- provider registry
-- provider resolution by name
-- skill execution using explicit provider
-- output renderer (basic)
-- agent adapter manifest listing
+---
 
-### 9. README Update
-Update README to include:
-- provider flags
-- output flags
-- examples for aws/gcp/gemini
-- mention agent adapter base
+## 4. Non-Negotiable Engineering Principles
 
-## Constraints
-- Keep idiomatic Go
-- Keep explicit wiring
-- Do not introduce heavy dependencies
-- Do not use Viper yet
-- Do not use native Go plugin loading
-- Do not over-engineer
-- Prefer small, focused diffs
+- Prefer **idiomatic Go** over theoretical purity
+- Prefer **clarity** over cleverness
+- Prefer **explicit wiring** over magic
+- Prefer **small interfaces** near consumers
+- Prefer **composition** over inheritance
+- Prefer **pragmatic DDD Lite** over heavy enterprise DDD
+- Prefer **simple, stable contracts** over over-abstraction
+- Prefer **skills reusable by CLI/API/Agent** over agent-only logic
 
-## Delivery format
-Return:
-1. files to change
-2. files to add
-3. updated code for each file
-4. short rationale for each change
-5. final sanity-check notes
+---
+
+## 5. What You MUST Avoid
+
+Do NOT:
+- create unnecessary interfaces
+- create service layers without real value
+- create manager/service/repository abstractions by habit
+- over-engineer the MVP
+- put business logic inside Cobra command handlers
+- make the architecture provider-first
+- initialize all providers eagerly on startup
+- use reflection unless clearly justified
+- use native Go `.so` plugin loading in MVP
+- hardcode secrets or credentials
+- log secrets
+- introduce large dependencies without justification
+- create duplicate registries
+- create duplicate skill contracts
+- create duplicate command trees
+- create parallel bootstrap paths
+
+---
+
+## 6. Skill Model (Very Important)
+
+A skill is a reusable capability of the platform with a stable input/output contract.
+
+A skill must be callable by:
+- CLI
+- future API
+- future AI agents
+
+Each skill should be:
+- small
+- composable
+- machine-friendly
+- deterministic when possible
+- easy to test
+- provider-agnostic when possible
+
+Naming convention:
+- `<domain>.<action>`
+
+Examples:
+- `doctor.run`
+- `auth.validate`
+- `auth.whoami`
+- `inventory.scan`
+- `inventory.summary`
+- `k8s.list_clusters`
+- `ai.explain`
+- `ai.generate_terraform`
+
+---
+
+## 7. Documentation-in-Code Rules (Mandatory)
+
+### 7.1 File headers (mandatory for important files)
+Important source files must include a short standardized file header at the top.
+
+Recommended format:
+
+```go
+// File: internal/application/inventory/scan.go
+// Company: Hassan
+// Creator: Zamp
+// Created: 15/03/2026
+// Updated: 15/03/2026
+// Purpose: Executes the inventory scan use case for reusable platform and agent skill flows.

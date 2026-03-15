@@ -20,7 +20,7 @@ The agent is the orchestration unit.
 
 ## 2. Skill Types
 
-## 2.1 Platform Skill
+### 2.1 Platform Skill
 A platform capability visible at the product level.
 
 Examples:
@@ -31,7 +31,7 @@ Examples:
 - k8s
 - plugin
 
-## 2.2 Agent Skill
+### 2.2 Agent Skill
 A machine-callable tool-like contract.
 
 Examples:
@@ -52,26 +52,11 @@ Use dot notation:
 
 `<domain>.<action>`
 
-Examples:
-- `doctor.run`
-- `auth.validate`
-- `inventory.scan`
-- `inventory.summary`
-- `k8s.list_clusters`
-- `ai.explain`
-- `ai.generate_terraform`
-
 Rules:
 - use lowercase
 - use verbs for actions
 - prefer stable names
 - avoid provider names in the skill name unless absolutely necessary
-
-Bad:
-- `aws.inventory.scan`
-- `gcp.auth.whoami`
-- `myCoolSkill`
-- `inventoryDoStuff`
 
 ---
 
@@ -83,18 +68,34 @@ Every skill must implement the project skill interface:
 - `Description() string`
 - `Execute(ctx context.Context, input map[string]any) (map[string]any, error)`
 
-For now, `map[string]any` is acceptable in MVP.
-In future versions, evolve to typed input/output models or schemas where useful.
+For MVP:
+- `map[string]any` is acceptable
+
+Future evolution:
+- typed input/output
+- JSON schema
+- tool manifest
+- MCP exposure
 
 ---
 
-## 5. Skill Design Checklist
+## 5. Documentation Rules for New Skills
+
+Every new skill must include:
+1. file header in key files
+2. Go doc comments on exported symbols
+3. update `docs/skills/catalog.md`
+4. use `docs/skills/templates/new-skill-template.md`
+5. add at least one example in README or docs when user-facing
+
+---
+
+## 6. Skill Design Checklist
 
 When creating a new skill:
-
 1. Identify the domain/capability
 2. Create or reuse the application use case
-3. Keep business logic in `application/` (or `domain/` when justified)
+3. Keep business logic in `internal/application/` (or `internal/domain/` when justified)
 4. Keep CLI handlers thin
 5. Register the skill in bootstrap
 6. Use machine-friendly output keys
@@ -104,7 +105,7 @@ When creating a new skill:
 
 ---
 
-## 6. Input/Output Rules
+## 7. Input/Output Rules
 
 ### Inputs
 - Keep input keys simple and explicit
@@ -112,32 +113,14 @@ When creating a new skill:
 - Validate required inputs
 - Use stable names
 
-Examples:
-- `provider`
-- `region`
-- `input`
-- `resource_type`
-
 ### Outputs
 - Return machine-friendly maps
 - Use stable keys
 - Avoid presentation formatting inside the skill
 
-Good:
-- `provider`
-- `valid`
-- `resources`
-- `clusters`
-- `content`
-
-Bad:
-- preformatted table strings
-- human-only decorated output
-- provider-specific raw SDK dumps
-
 ---
 
-## 7. CLI Rule
+## 8. CLI Rule
 
 Cobra command handlers must:
 - parse flags/args
@@ -151,32 +134,7 @@ Cobra command handlers must NOT:
 
 ---
 
-## 8. Provider Rule
-
-Skills should prefer provider selection through:
-- input
-- config
-- registry lookup
-
-Do NOT hardcode provider selection inside the skill unless explicitly temporary and clearly marked.
-
----
-
-## 9. Skill Evolution Rule
-
-A skill may evolve from:
-- MVP map-based contract
-to:
-- typed input/output
-- JSON schema
-- tool manifest
-- MCP exposure
-
-But the public semantic behavior should remain stable.
-
----
-
-## 10. Forbidden
+## 9. Forbidden
 
 Do NOT:
 - put business logic in Cobra commands

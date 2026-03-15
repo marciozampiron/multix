@@ -34,49 +34,25 @@ Use:
 Avoid:
 - over-mocking
 - brittle tests tied to internals
-- snapshot tests for unstable outputs
 
 ---
 
 ## 4. What to Test for Each New Skill
 
 For each new skill, prefer at least:
-
 1. registration test
 2. successful execution test
 3. invalid input test (if applicable)
 
-If the skill has branching:
-- use table-driven tests
-
 ---
 
-## 5. What Not to Test Excessively
-
-Do NOT over-test:
-- trivial getters
-- obvious wiring if already covered by smoke tests
-- private helper minutiae unless complex
-
----
-
-## 6. Test Naming
-
-Use descriptive names:
-- `TestSkillRegistryRegistersCoreSkills`
-- `TestExecuteDoctorSkill`
-- `TestInventoryScanReturnsResources`
-- `TestAIExplainRequiresInput`
-
----
-
-## 7. Commands
+## 5. Commands
 
 Preferred:
 - `make test`
 - `make test-race`
 
 Before finalizing changes:
-- run `make fmt`
-- run `make vet`
-- run `make test`
+- `make fmt`
+- `make vet`
+- `make test`

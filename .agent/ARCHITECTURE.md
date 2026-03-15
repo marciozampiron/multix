@@ -1,3 +1,9 @@
+
+---
+
+# 2) `.agent/ARCHITECTURE.md`
+
+```md
 # Multix Architecture Rules
 
 ## 1. Architecture Style
@@ -49,17 +55,12 @@ Do NOT reorganize the repo around cloud providers.
 
 ## 3. Layer Responsibilities
 
-## 3.1 `cmd/`
+### 3.1 `cmd/`
 Contains executable entrypoints only.
-
-Example:
-- `cmd/multix/main.go`
 
 No business logic here.
 
----
-
-## 3.2 `internal/application/`
+### 3.2 `internal/application/`
 Contains use cases / orchestration logic.
 
 Responsibilities:
@@ -68,31 +69,15 @@ Responsibilities:
 - transform domain data for use case results
 - remain independent from Cobra and concrete SDKs
 
-This is where reusable behavior should live.
-
----
-
-## 3.3 `internal/ports/`
+### 3.3 `internal/ports/`
 Contains contracts/interfaces.
 
 Rules:
 - interfaces should be small
 - interfaces should be consumer-oriented
 - do not create giant god-interfaces
-- do not put implementation logic here
 
-Examples:
-- `CloudAuthProvider`
-- `CloudInventoryProvider`
-- `KubernetesProvider`
-- `AIProvider`
-- `Skill`
-- `SkillRegistry`
-- `SkillExecutor`
-
----
-
-## 3.4 `internal/adapters/inbound/`
+### 3.4 `internal/adapters/inbound/`
 Contains entrypoint adapters.
 
 Examples:
@@ -106,9 +91,7 @@ Rules:
 - call skill or use case
 - format outputs
 
----
-
-## 3.5 `internal/adapters/outbound/`
+### 3.5 `internal/adapters/outbound/`
 Contains integrations with external systems.
 
 Examples:
@@ -119,11 +102,8 @@ Examples:
 Rules:
 - isolate provider-specific SDK details here
 - do not leak SDK types into application layer
-- keep provider-specific complexity contained
 
----
-
-## 3.6 `internal/bootstrap/`
+### 3.6 `internal/bootstrap/`
 Contains explicit wiring.
 
 Responsibilities:
@@ -139,9 +119,7 @@ Rules:
 - easy to read
 - easy to test
 
----
-
-## 3.7 `internal/domain/`
+### 3.7 `internal/domain/`
 Contains:
 - models
 - domain-specific errors
@@ -149,7 +127,6 @@ Contains:
 - shared domain semantics
 
 Keep it lean.
-Do not force fake domain layers if there is no real domain logic yet.
 
 ---
 
@@ -164,16 +141,6 @@ A skill should:
 - have stable input/output keys
 - avoid provider lock-in when possible
 
-Bad:
-- one-off agent-only hacks
-- embedding prompt logic as business logic
-- mixing formatting with execution
-
-Good:
-- clear use case
-- stable result map / schema
-- small contract
-
 ---
 
 ## 5. Provider Design Rules
@@ -185,9 +152,8 @@ Providers should be:
 - replaceable
 
 Do not:
-- reference AWS/GCP/Gemini concrete types in application layer
+- reference concrete provider SDK types in application layer
 - pass SDK structs through ports
-- make providers control CLI behavior
 
 ---
 
@@ -202,23 +168,11 @@ MVP plugin design should be:
 Do NOT use:
 - native Go `.so` plugin loading in MVP
 
-Prefer:
-- manifest discovery
-- executable adapters
-- config-based enabling
-- future external plugin contracts
-
 ---
 
 ## 7. Future Agent Layer
 
 Future agent adapters should call skills, not re-implement logic.
-
-Future path:
-- agent adapter
-- tool manifest
-- input/output schema
-- MCP-compatible exposure
 
 Rule:
 - agents orchestrate

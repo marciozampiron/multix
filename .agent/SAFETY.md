@@ -23,12 +23,6 @@ When logging:
 - never print secrets from config
 - mask sensitive identifiers if needed
 
-Bad:
-- `logger.Info("using token", "token", token)`
-
-Good:
-- `logger.Info("using token", "token_present", token != "")`
-
 ---
 
 ## 3. Shell Safety
@@ -39,7 +33,6 @@ If shell is needed:
 - keep it explicit
 - validate inputs
 - avoid command injection risks
-- do not pass user input directly to shell
 
 ---
 
@@ -48,8 +41,7 @@ If shell is needed:
 When integrating real providers:
 - validate credentials early
 - use least privilege assumptions
-- do not leak provider SDK errors directly if they contain sensitive data
-- normalize errors at boundaries when useful
+- do not leak sensitive provider errors directly if they contain secrets
 
 ---
 
@@ -71,16 +63,10 @@ Preferred command:
 MVP plugin system must NOT use:
 - native Go `.so` plugin loading
 
-Reasons:
-- portability concerns
-- compatibility complexity
-- operational fragility
-
 Prefer:
 - manifest-based plugins
 - external executables
 - controlled adapters
-- explicit enable/disable
 
 ---
 
