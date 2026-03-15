@@ -3,7 +3,7 @@
 // Creator: Zamp
 // Created: 15/03/2026
 // Updated: 15/03/2026
-// Purpose: Registers platform-level capabilities into the central skill executor.
+// Purpose: Registers application skills into the central runtime skill registry.
 
 package bootstrap
 
@@ -17,22 +17,27 @@ import (
 	"multix/internal/ports/outbound"
 )
 
-// BuildSkillRegistry gathers all the skills into a central skill registry.
-// Skills are injected with the ProviderRegistry so they can resolve providers dynamically.
+// BuildSkillRegistry registers all available skills and injects the provider registry
+// so provider-dependent skills can resolve implementations dynamically at runtime.
 func BuildSkillRegistry(providers outbound.ProviderRegistry) *skills.Registry {
 	skillRegistry := skills.NewRegistry()
 
+	// Platform diagnostics.
 	skillRegistry.Register(doctor.NewCheckEnvSkill())
 
+	// Authentication and identity.
 	skillRegistry.Register(auth.NewLoginSkill(providers))
 	skillRegistry.Register(auth.NewValidateSkill(providers))
 	skillRegistry.Register(auth.NewWhoamiSkill(providers))
 
+	// Cloud inventory.
 	skillRegistry.Register(inventory.NewScanSkill(providers))
 	skillRegistry.Register(inventory.NewSummarySkill(providers))
 
+	// Kubernetes.
 	skillRegistry.Register(k8s.NewListClustersSkill(providers))
 
+	// AI.
 	skillRegistry.Register(ai.NewExplainSkill(providers))
 
 	return skillRegistry

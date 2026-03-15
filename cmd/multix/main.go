@@ -15,8 +15,13 @@ import (
 )
 
 func main() {
-	app := bootstrap.BuildApp()
-	cmd := bootstrap.Wire(app)
+	app, err := bootstrap.BuildApp()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Bootstrap Error: %v\n", err)
+		os.Exit(1)
+	}
+
+	cmd := app.Wire()
 
 	if err := cmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Runtime Error: %v\n", err)

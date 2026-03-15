@@ -3,7 +3,7 @@
 // Creator: Zamp
 // Created: 15/03/2026
 // Updated: 15/03/2026
-// Purpose: Orchestrates platform startup by injecting required dependencies.
+// Purpose: Orchestrates platform startup by composing runtime dependencies.
 
 package bootstrap
 
@@ -20,7 +20,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// App encapsulates the entire application state and command tree.
+// App encapsulates the application runtime dependencies and command tree.
 type App struct {
 	Config           *config.Config
 	Logger           logger.Logger
@@ -30,8 +30,8 @@ type App struct {
 	SkillExecutor    *skills.Executor
 }
 
-// BuildApp constructs the core dependencies and prepares the runtime.
-func BuildApp() *App {
+// BuildApp constructs the application runtime dependencies.
+func BuildApp() (*App, error) {
 	cfg := LoadConfig()
 	log := logger.New("info")
 	rootCmd := root.NewRootCmd()
@@ -47,23 +47,23 @@ func BuildApp() *App {
 		ProviderRegistry: providers,
 		SkillRegistry:    skillRegistry,
 		SkillExecutor:    executor,
-	}
+	}, nil
 }
 
-// Wire binds the application commands to the Cobra root command.
-func Wire(app *App) *cobra.Command {
+// Wire registers inbound CLI handlers and returns the wired root command.
+func (a *App) Wire() *cobra.Command {
 	handlers := []inbound.CLIHandler{
-		cli.NewDoctorHandler(app.RootCmd, app.SkillExecutor),
-		cli.NewAuthHandler(app.RootCmd, app.SkillExecutor),
-		cli.NewInventoryHandler(app.RootCmd, app.SkillExecutor),
-		cli.NewK8sHandler(app.RootCmd, app.SkillExecutor),
-		cli.NewAIHandler(app.RootCmd, app.SkillExecutor),
+		cli.NewDoctorHandler(a.RootCmd, a.SkillExecutor),
+		cli.NewAuthHandler(a.RootCmd, a.SkillExecutor),
+		cli.NewInventoryHandler(a.RootCmd, a.SkillExecutor),
+		cli.NewK8sHandler(a.RootCmd, a.SkillExecutor),
+		cli.NewAIHandler(a.RootCmd, a.SkillExecutor),
 	}
 
 	for _, h := range handlers {
 		h.Register()
 	}
 
-	root.RegisterVersionCmd(app.RootCmd)
-	return app.RootCmd
+	root.RegisterVersionCmd(a.RootCmd)
+	return a.RootCmd
 }
