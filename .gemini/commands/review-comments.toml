@@ -1,0 +1,10 @@
+description = "Review documentation quality only: headers, Go doc comments, and comment consistency."
+prompt = """
+Read and follow:
+- GEMINI.md
+- .agent/*.md
+- docs/standards/*
+
+Then execute:
+@prompts/review-comments.md
+"""

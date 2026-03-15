@@ -1,0 +1,10 @@
+description = "Apply a documentation-only pass: file headers, Go doc comments, and useful inline comments."
+prompt = """
+Read and follow:
+- GEMINI.md
+- .agent/*.md
+- docs/standards/*
+
+Then execute:
+@prompts/comment-pass.md
+"""

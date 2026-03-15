@@ -56,7 +56,7 @@ help: ## Show this help
 
 GEMINI ?= gemini
 
-.PHONY: ai-help ai-plan ai-implement ai-review ai-safe-fix ai-prompts
+.PHONY: ai-help ai-plan ai-implement ai-review ai-safe-fix ai-prompts ai-comments ai-review-comments
 
 ai-help:
 	@echo "Available AI workflow targets:"
@@ -64,6 +64,8 @@ ai-help:
 	@echo "  make ai-implement   - open implement-only workflow"
 	@echo "  make ai-review      - open review-only workflow"
 	@echo "  make ai-safe-fix    - open safe minimal patch workflow"
+	@echo "  make ai-comments    - open documentation pass workflow"
+	@echo "  make ai-review-comments - open docs review workflow"
 	@echo "  make ai-prompts     - list prompt files"
 
 ai-plan:
@@ -96,3 +98,17 @@ ai-safe-fix:
 
 ai-prompts:
 	@find prompts -maxdepth 1 -type f -name "*.md" | sort
+
+ai-comments:
+	@echo "Run in Gemini CLI:"
+	@echo "  /comments"
+	@echo ""
+	@echo "Or open:"
+	@echo "  prompts/comment-pass.md"
+
+ai-review-comments:
+	@echo "Run in Gemini CLI:"
+	@echo "  /review-comments"
+	@echo ""
+	@echo "Or open:"
+	@echo "  prompts/review-comments.md"

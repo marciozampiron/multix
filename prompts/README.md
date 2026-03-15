@@ -18,6 +18,13 @@ This directory contains reusable prompt templates for Gemini CLI / Gemini Code A
 - `feature-template.md`
   - reusable template for new feature work
 
+## Documentation workflows
+
+- `comment-pass.md`
+  - adds file headers, Go doc comments, and useful non-noisy comments
+- `review-comments.md`
+  - reviews documentation quality only, no code changes
+
 ## Rules
 
 - Prefer patch-style evolution
