@@ -1,4 +1,5 @@
 description = "Review documentation quality only: headers, Go doc comments, and comment consistency."
+
 prompt = """
 Read and follow:
 - GEMINI.md
