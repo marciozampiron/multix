@@ -30,7 +30,7 @@ func (s *ListClustersSkill) InputSchema() any {
 }
 func (s *ListClustersSkill) Execute(ctx context.Context, input map[string]any) (any, error) {
 	providerName, _ := input["provider"].(string)
-	p, err := s.providers.GetK8s(providerName)
+	p, err := s.providers.GetKubernetesProvider(providerName)
 	if err != nil {
 		return nil, err
 	}

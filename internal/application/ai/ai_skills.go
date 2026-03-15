@@ -31,7 +31,7 @@ func (s *ExplainSkill) InputSchema() any {
 }
 func (s *ExplainSkill) Execute(ctx context.Context, input map[string]any) (any, error) {
 	providerName, _ := input["provider"].(string)
-	p, err := s.providers.GetAI(providerName)
+	p, err := s.providers.GetAIProvider(providerName)
 	if err != nil {
 		return nil, err
 	}

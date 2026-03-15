@@ -35,8 +35,7 @@ func (r *BootstrapRegistry) RegisterAI(name string, p outbound.AIProvider) {
 	r.aiProviders[name] = p
 }
 
-// Getters dynamically retrieve the provider by string identifier
-func (r *BootstrapRegistry) GetAuth(name string) (outbound.AuthProvider, error) {
+func (r *BootstrapRegistry) GetCloudAuthProvider(name string) (outbound.AuthProvider, error) {
 	p, ok := r.authProviders[name]
 	if !ok {
 		return nil, fmt.Errorf("auth provider '%s' not found", name)
@@ -44,7 +43,7 @@ func (r *BootstrapRegistry) GetAuth(name string) (outbound.AuthProvider, error) 
 	return p, nil
 }
 
-func (r *BootstrapRegistry) GetInventory(name string) (outbound.InventoryProvider, error) {
+func (r *BootstrapRegistry) GetCloudInventoryProvider(name string) (outbound.InventoryProvider, error) {
 	p, ok := r.inventoryProviders[name]
 	if !ok {
 		return nil, fmt.Errorf("inventory provider '%s' not found", name)
@@ -52,7 +51,7 @@ func (r *BootstrapRegistry) GetInventory(name string) (outbound.InventoryProvide
 	return p, nil
 }
 
-func (r *BootstrapRegistry) GetK8s(name string) (outbound.K8sProvider, error) {
+func (r *BootstrapRegistry) GetKubernetesProvider(name string) (outbound.K8sProvider, error) {
 	p, ok := r.k8sProviders[name]
 	if !ok {
 		return nil, fmt.Errorf("k8s provider '%s' not found", name)
@@ -60,7 +59,7 @@ func (r *BootstrapRegistry) GetK8s(name string) (outbound.K8sProvider, error) {
 	return p, nil
 }
 
-func (r *BootstrapRegistry) GetAI(name string) (outbound.AIProvider, error) {
+func (r *BootstrapRegistry) GetAIProvider(name string) (outbound.AIProvider, error) {
 	p, ok := r.aiProviders[name]
 	if !ok {
 		return nil, fmt.Errorf("ai provider '%s' not found", name)

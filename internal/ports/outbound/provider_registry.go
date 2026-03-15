@@ -1,8 +1,8 @@
 package outbound
 
 type ProviderRegistry interface {
-	GetAuth(name string) (AuthProvider, error)
-	GetInventory(name string) (InventoryProvider, error)
-	GetK8s(name string) (K8sProvider, error)
-	GetAI(name string) (AIProvider, error)
+	GetCloudAuthProvider(name string) (AuthProvider, error)
+	GetCloudInventoryProvider(name string) (InventoryProvider, error)
+	GetKubernetesProvider(name string) (K8sProvider, error)
+	GetAIProvider(name string) (AIProvider, error)
 }

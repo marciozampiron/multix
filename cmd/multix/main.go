@@ -8,10 +8,10 @@ import (
 )
 
 func main() {
-	container := bootstrap.BuildContainer()
-	rootCmd := bootstrap.Wire(container)
+	app := bootstrap.BuildApp()
+	cmd := bootstrap.Wire(app)
 
-	if err := rootCmd.Execute(); err != nil {
+	if err := cmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "Runtime Error: %v\n", err)
 		os.Exit(1)
 	}

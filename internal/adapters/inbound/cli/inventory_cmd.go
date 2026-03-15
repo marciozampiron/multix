@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/spf13/cobra"
 	"multix/internal/application/skills"
-	"multix/internal/platform/formatter"
 )
 
 type inventoryHandler struct {
@@ -41,7 +40,7 @@ func (h *inventoryHandler) Register() {
 				return err
 			}
 
-			return formatter.Print(res, formatter.OutputFormat(outFmt))
+			return render(res, outFmt)
 		},
 	}
 	listCmd.Flags().StringP("service", "s", "", "Filter by service/resource type (e.g., compute, ec2)")

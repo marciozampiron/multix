@@ -32,7 +32,7 @@ func (s *ScanSkill) InputSchema() any {
 
 func (s *ScanSkill) Execute(ctx context.Context, input map[string]any) (any, error) {
 	providerName, _ := input["provider"].(string)
-	p, err := s.providers.GetInventory(providerName)
+	p, err := s.providers.GetCloudInventoryProvider(providerName)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +75,7 @@ func (s *SummarySkill) InputSchema() any {
 }
 func (s *SummarySkill) Execute(ctx context.Context, input map[string]any) (any, error) {
 	providerName, _ := input["provider"].(string)
-	p, err := s.providers.GetInventory(providerName)
+	p, err := s.providers.GetCloudInventoryProvider(providerName)
 	if err != nil {
 		return nil, err
 	}

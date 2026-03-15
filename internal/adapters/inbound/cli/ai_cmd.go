@@ -4,7 +4,6 @@ import (
 	"context"
 	"github.com/spf13/cobra"
 	"multix/internal/application/skills"
-	"multix/internal/platform/formatter"
 )
 
 type aiHandler struct {
@@ -34,7 +33,7 @@ func (h *aiHandler) Register() {
 				return err
 			}
 
-			return formatter.Print(res, formatter.OutputFormat(outFmt))
+			return render(res, outFmt)
 		},
 	}
 

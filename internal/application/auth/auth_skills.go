@@ -35,7 +35,7 @@ func (s *ValidateSkill) InputSchema() any {
 
 func (s *ValidateSkill) Execute(ctx context.Context, input map[string]any) (any, error) {
 	providerName, _ := input["provider"].(string)
-	p, err := s.providers.GetAuth(providerName)
+	p, err := s.providers.GetCloudAuthProvider(providerName)
 	if err != nil {
 		return nil, err
 	}
@@ -71,7 +71,7 @@ func (s *WhoamiSkill) InputSchema() any {
 
 func (s *WhoamiSkill) Execute(ctx context.Context, input map[string]any) (any, error) {
 	providerName, _ := input["provider"].(string)
-	p, err := s.providers.GetAuth(providerName)
+	p, err := s.providers.GetCloudAuthProvider(providerName)
 	if err != nil {
 		return nil, err
 	}
@@ -107,7 +107,7 @@ func (s *LoginSkill) InputSchema() any {
 }
 func (s *LoginSkill) Execute(ctx context.Context, input map[string]any) (any, error) {
 	providerName, _ := input["provider"].(string)
-	p, err := s.providers.GetAuth(providerName)
+	p, err := s.providers.GetCloudAuthProvider(providerName)
 	if err != nil {
 		return nil, err
 	}

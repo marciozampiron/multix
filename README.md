@@ -21,22 +21,22 @@ Every business use case (a "Skill") implements a JSON-capable interface (`domain
 
 ```text
 multix/
+├── GEMINI.md                   # Agent governance instructions
+├── .agent/                     # Specific LLM context files (SKILL, ARCHITECTURE, etc)
 ├── cmd/
 │   ├── multix/                 # The main entrypoint, minimal and clean
 │   └── root/                   # Base Cobra CLI root commands
 ├── internal/
 │   ├── domain/                 # Core domain models and the Universal Skill Contract
-│   │   ├── skills/             # Registry, Executor, and interface definitions
-│   │   └── {auth, k8s, ...}
 │   ├── application/            # The actual Go logic wrapping business capabilities
 │   ├── ports/
 │   │   ├── inbound/            # Interfaces for CLI Handlers and Agent Tool Handlers
-│   │   └── outbound/           # Deeply segregated required interfaces (Auth, K8s, Inventory)
+│   │   └── outbound/           # Required interfaces (Provider Registry)
 │   ├── adapters/
 │   │   ├── inbound/cli/        # Cobra CLI Handlers
-│   │   └── outbound/           # Provider implementations (aws, gcp, gemini, config)
-│   ├── bootstrap/              # High-performance static dependency injection (Wiring)
-│   └── platform/               # Transversal cross-cutting concerns (logger, etc.)
+│   │   ├── inbound/agent/      # Agent Tool Adapter Base (manifests generation)
+│   │   └── outbound/           # Provider implementations (aws, gcp, gemini)
+│   └── bootstrap/              # High-performance static dependency injection (Wiring)
 ├── Makefile                    # Developer workflow automation
 └── README.md
 ```
@@ -56,23 +56,24 @@ make build
 ./build/multix version
 ```
 
-### Running CLI Commands
+### Running CLI Commands (V0.2)
+
+Multix V0.2 supports dynamic Cloud mappings and Outputs via global flags:
+- `--provider [aws|gcp]`
+- `--output [json|table]`
 
 ```bash
-# Check your environment capabilities
-./build/multix doctor
-
 # Authenticate against a cloud provider
-./build/multix auth login --provider aws
+./build/multix auth login --provider gcp
 
-# Discover assets across your estate
-./build/multix inventory list --service compute
+# Discover assets across your estate (AWS is default if omitted)
+./build/multix inventory list --service compute --provider aws --output json
 
-# Fetch your managed Kubernetes clusters
-./build/multix k8s clusters
+# Fetch your managed Kubernetes clusters dynamically
+./build/multix k8s clusters --provider gcp --output table
 
 # Ask the embedded AI Agent to explain concepts
-./build/multix ai explain "CrashLoopBackOff"
+./build/multix ai explain "CrashLoopBackOff" --provider gemini --output json
 ```
 
 ## 📐 Extending the Application
