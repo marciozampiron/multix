@@ -1,3 +1,10 @@
+// File: internal/domain/skills/skill.go
+// Company: Hassan
+// Creator: Zamp
+// Created: 15/03/2026
+// Updated: 15/03/2026
+// Purpose: Defines the universal Skill contract.
+
 package skills
 
 import "context"

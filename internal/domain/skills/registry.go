@@ -1,3 +1,10 @@
+// File: internal/domain/skills/registry.go
+// Company: Hassan
+// Creator: Zamp
+// Created: 15/03/2026
+// Updated: 15/03/2026
+// Purpose: Implements the central runtime registry for available skills.
+
 package skills
 
 import (
@@ -12,6 +19,7 @@ type Registry struct {
 	skills map[string]Skill
 }
 
+// NewRegistry creates a new instance of the skill registry.
 func NewRegistry() *Registry {
 	return &Registry{
 		skills: make(map[string]Skill),

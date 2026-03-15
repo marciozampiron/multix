@@ -1,3 +1,10 @@
+// File: internal/bootstrap/config.go
+// Company: Hassan
+// Creator: Zamp
+// Created: 15/03/2026
+// Updated: 15/03/2026
+// Purpose: Bootstraps the in-memory application configuration logic.
+
 package bootstrap
 
 import (

@@ -1,3 +1,10 @@
+// File: internal/application/doctor/doctor_skill.go
+// Company: Hassan
+// Creator: Zamp
+// Created: 15/03/2026
+// Updated: 15/03/2026
+// Purpose: Validates local execution dependencies and environment readiness.
+
 package doctor
 
 import (
@@ -9,6 +16,7 @@ import (
 // CheckEnvSkill is the universal tool for validating environment dependencies.
 type CheckEnvSkill struct{}
 
+// NewCheckEnvSkill creates a new CheckEnvSkill.
 func NewCheckEnvSkill() skills.Skill {
 	return &CheckEnvSkill{}
 }

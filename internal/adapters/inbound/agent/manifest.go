@@ -1,3 +1,10 @@
+// File: internal/adapters/inbound/agent/manifest.go
+// Company: Hassan
+// Creator: Zamp
+// Created: 15/03/2026
+// Updated: 15/03/2026
+// Purpose: Generates AI tool manifests from registered skills.
+
 package agent
 
 import (

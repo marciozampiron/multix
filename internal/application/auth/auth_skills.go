@@ -1,3 +1,10 @@
+// File: internal/application/auth/auth_skills.go
+// Company: Hassan
+// Creator: Zamp
+// Created: 15/03/2026
+// Updated: 15/03/2026
+// Purpose: Implements authentication skills for cloud providers.
+
 package auth
 
 import (
@@ -8,10 +15,12 @@ import (
 	"multix/internal/ports/outbound" // Import for ProviderRegistry
 )
 
+// ValidateSkill validates if the user's current cloud provider credentials are valid and active.
 type ValidateSkill struct {
 	providers outbound.ProviderRegistry
 }
 
+// NewValidateSkill creates a new ValidateSkill.
 func NewValidateSkill(pr outbound.ProviderRegistry) skills.Skill {
 	return &ValidateSkill{providers: pr}
 }
@@ -47,10 +56,12 @@ func (s *ValidateSkill) Execute(ctx context.Context, input map[string]any) (any,
 	return map[string]any{"is_valid": valid, "reason": ""}, nil
 }
 
+// WhoamiSkill returns the active identity information, IAM role or account ID for the provider.
 type WhoamiSkill struct {
 	providers outbound.ProviderRegistry
 }
 
+// NewWhoamiSkill creates a new WhoamiSkill.
 func NewWhoamiSkill(pr outbound.ProviderRegistry) skills.Skill {
 	return &WhoamiSkill{providers: pr}
 }
@@ -87,10 +98,12 @@ func (s *WhoamiSkill) Execute(ctx context.Context, input map[string]any) (any, e
 	}, nil
 }
 
+// LoginSkill authenticates the machine to a specific provider.
 type LoginSkill struct {
 	providers outbound.ProviderRegistry
 }
 
+// NewLoginSkill creates a new LoginSkill.
 func NewLoginSkill(pr outbound.ProviderRegistry) skills.Skill {
 	return &LoginSkill{providers: pr}
 }

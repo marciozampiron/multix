@@ -1,3 +1,10 @@
+// File: internal/bootstrap/registry.go
+// Company: Hassan
+// Creator: Zamp
+// Created: 15/03/2026
+// Updated: 15/03/2026
+// Purpose: Wires and resolves abstract multi-cloud provider integration ports.
+
 package bootstrap
 
 import (

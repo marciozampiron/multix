@@ -1,3 +1,10 @@
+// File: internal/application/skills/executor.go
+// Company: Hassan
+// Creator: Zamp
+// Created: 15/03/2026
+// Updated: 15/03/2026
+// Purpose: Executes registered skills dynamically by name.
+
 package skills
 
 import (
@@ -12,6 +19,7 @@ type Executor struct {
 	registry *domainSkills.Registry
 }
 
+// NewExecutor creates a new skill executor.
 func NewExecutor(registry *domainSkills.Registry) *Executor {
 	return &Executor{registry: registry}
 }

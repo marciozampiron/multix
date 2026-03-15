@@ -1,3 +1,10 @@
+// File: internal/bootstrap/app.go
+// Company: Hassan
+// Creator: Zamp
+// Created: 15/03/2026
+// Updated: 15/03/2026
+// Purpose: Orchestrates platform startup by injecting required dependencies.
+
 package bootstrap
 
 import (
@@ -13,6 +20,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// App encapsulates the entire application state and command tree.
 type App struct {
 	Config           *config.Config
 	Logger           logger.Logger
@@ -22,6 +30,7 @@ type App struct {
 	SkillExecutor    *skills.Executor
 }
 
+// BuildApp constructs the core dependencies and prepares the runtime.
 func BuildApp() *App {
 	cfg := LoadConfig()
 	log := logger.New("info")
@@ -41,6 +50,7 @@ func BuildApp() *App {
 	}
 }
 
+// Wire binds the application commands to the Cobra root command.
 func Wire(app *App) *cobra.Command {
 	handlers := []inbound.CLIHandler{
 		cli.NewDoctorHandler(app.RootCmd, app.SkillExecutor),

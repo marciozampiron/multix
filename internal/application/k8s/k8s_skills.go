@@ -1,3 +1,10 @@
+// File: internal/application/k8s/k8s_skills.go
+// Company: Hassan
+// Creator: Zamp
+// Created: 15/03/2026
+// Updated: 15/03/2026
+// Purpose: Implements skills to manage and list Kubernetes clusters.
+
 package k8s
 
 import (
@@ -7,10 +14,12 @@ import (
 	"multix/internal/ports/outbound" // Dynamic Provider Resolution
 )
 
+// ListClustersSkill lists all managed Kubernetes clusters.
 type ListClustersSkill struct {
 	providers outbound.ProviderRegistry
 }
 
+// NewListClustersSkill creates a new ListClustersSkill.
 func NewListClustersSkill(pr outbound.ProviderRegistry) skills.Skill {
 	return &ListClustersSkill{providers: pr}
 }

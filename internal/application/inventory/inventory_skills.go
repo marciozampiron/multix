@@ -1,3 +1,10 @@
+// File: internal/application/inventory/inventory_skills.go
+// Company: Hassan
+// Creator: Zamp
+// Created: 15/03/2026
+// Updated: 15/03/2026
+// Purpose: Implements logic to scan and summarize cloud assets.
+
 package inventory
 
 import (
@@ -7,10 +14,12 @@ import (
 	"multix/internal/ports/outbound" // Dynamic Provider Resolution
 )
 
+// ScanSkill scans the cloud provider to discover active infrastructure resources filtered by type.
 type ScanSkill struct {
 	providers outbound.ProviderRegistry
 }
 
+// NewScanSkill creates a new ScanSkill.
 func NewScanSkill(pr outbound.ProviderRegistry) skills.Skill {
 	return &ScanSkill{providers: pr}
 }
@@ -57,10 +66,12 @@ func (s *ScanSkill) Execute(ctx context.Context, input map[string]any) (any, err
 	return map[string]any{"resources": parsed, "count": len(parsed)}, nil
 }
 
+// SummarySkill returns an aggregated count of all discoveries.
 type SummarySkill struct {
 	providers outbound.ProviderRegistry
 }
 
+// NewSummarySkill creates a new SummarySkill.
 func NewSummarySkill(pr outbound.ProviderRegistry) skills.Skill {
 	return &SummarySkill{providers: pr}
 }

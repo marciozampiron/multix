@@ -1,3 +1,10 @@
+// File: internal/bootstrap/skills.go
+// Company: Hassan
+// Creator: Zamp
+// Created: 15/03/2026
+// Updated: 15/03/2026
+// Purpose: Registers platform-level capabilities into the central skill executor.
+
 package bootstrap
 
 import (

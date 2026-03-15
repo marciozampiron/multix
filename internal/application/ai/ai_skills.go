@@ -1,3 +1,10 @@
+// File: internal/application/ai/ai_skills.go
+// Company: Hassan
+// Creator: Zamp
+// Created: 15/03/2026
+// Updated: 15/03/2026
+// Purpose: Implements capabilities that leverage AI providers.
+
 package ai
 
 import (
@@ -8,10 +15,12 @@ import (
 	"time"
 )
 
+// ExplainSkill queries an AI backend to explain a cloud infrastructure resource or error.
 type ExplainSkill struct {
 	providers outbound.ProviderRegistry
 }
 
+// NewExplainSkill creates a new ExplainSkill.
 func NewExplainSkill(pr outbound.ProviderRegistry) skills.Skill {
 	return &ExplainSkill{providers: pr}
 }
