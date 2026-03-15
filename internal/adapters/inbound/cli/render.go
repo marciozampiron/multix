@@ -33,14 +33,23 @@ func printJSON(w io.Writer, payload any) error {
 }
 
 func printTable(w io.Writer, payload any) error {
-	// MVP: If payload is a map, iterate and print K:V cleanly
-	if m, ok := payload.(map[string]any); ok {
-		for k, v := range m {
-			fmt.Fprintf(w, "%s:\t%v\n", k, v)
-		}
+	// MVP: Convert payload to JSON, then to map, to uniformly print K:V cleanly
+	b, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	var m map[string]any
+	if err := json.Unmarshal(b, &m); err != nil {
+		// Fallback if not an object
+		fmt.Fprintf(w, "%v\n", payload)
 		return nil
 	}
-	// Fallback if not a map
-	fmt.Fprintf(w, "%v\n", payload)
+
+	for k, v := range m {
+		if v != nil && v != "" {
+			fmt.Fprintf(w, "%s:\t%v\n", k, v)
+		}
+	}
 	return nil
 }

@@ -76,6 +76,28 @@ Multix V0.2 supports dynamic Cloud mappings and Outputs via global flags:
 ./build/multix ai explain "CrashLoopBackOff" --provider gemini --output json
 ```
 
+### ✅ Manual Validation (v0.3-alpha Auth Providers)
+
+You can manually smoke test the real AWS and GCP auth provider integrations using the following commands:
+
+```bash
+# Validate AWS credentials
+./build/multix auth validate --provider aws --output json
+
+# Check AWS caller identity
+./build/multix auth whoami --provider aws --output table
+
+# Validate GCP application default credentials
+./build/multix auth validate --provider gcp --output json
+
+# Check GCP active credentials and project
+./build/multix auth whoami --provider gcp --output table
+```
+
+**Prerequisites:**
+- **AWS**: Requires active AWS credentials configured (e.g., via `~/.aws/credentials`, `AWS_ACCESS_KEY_ID`, or AWS SSO).
+- **GCP**: Requires active Application Default Credentials (e.g., via `gcloud auth application-default login` or `GOOGLE_APPLICATION_CREDENTIALS`). Depending on your credential source, GCP may provide a best-effort principal identity but will consistently resolve your `project_id`.
+
 ## 📐 Extending the Application
 
 To add a new skill to the platform:

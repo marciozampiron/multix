@@ -1,9 +1,6 @@
 package cli
 
 import (
-	"context"
-	"fmt"
-
 	"multix/internal/application/skills"
 
 	"github.com/spf13/cobra"
@@ -24,37 +21,43 @@ func (h *authHandler) Register() {
 		Short: "Manage authentication and access validation across providers",
 	}
 
-	loginCmd := &cobra.Command{
-		Use:   "login",
-		Short: "Login to a provider",
+	validateCmd := &cobra.Command{
+		Use:           "validate",
+		Short:         "Validate current provider credentials",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			res, err := h.executor.Execute(context.Background(), "auth.login", map[string]any{"provider": "aws"})
+			provider, _ := cmd.Flags().GetString("provider")
+			outFmt, _ := cmd.Flags().GetString("output")
+
+			res, err := h.executor.Execute(cmd.Context(), "auth.validate", map[string]any{"provider": provider})
 			if err != nil {
 				return err
 			}
 
-			payload := res.(map[string]any)
-			fmt.Printf("Successfully logged in to %s (valid: %v)\n", payload["provider"], payload["valid"])
-			return nil
+			return render(res, outFmt)
 		},
 	}
 
 	whoamiCmd := &cobra.Command{
-		Use:   "whoami",
-		Short: "Display current active identity",
+		Use:           "whoami",
+		Short:         "Display current active identity",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			res, err := h.executor.Execute(context.Background(), "auth.whoami", map[string]any{"provider": "aws"})
+			provider, _ := cmd.Flags().GetString("provider")
+			outFmt, _ := cmd.Flags().GetString("output")
+
+			res, err := h.executor.Execute(cmd.Context(), "auth.whoami", map[string]any{"provider": provider})
 			if err != nil {
 				return err
 			}
 
-			payload := res.(map[string]any)
-			fmt.Printf("Current Identity: %s under account %s\n", payload["username"], payload["account_id"])
-			return nil
+			return render(res, outFmt)
 		},
 	}
 
-	authCmd.AddCommand(loginCmd)
+	authCmd.AddCommand(validateCmd)
 	authCmd.AddCommand(whoamiCmd)
 	h.rootCmd.AddCommand(authCmd)
 }

@@ -49,11 +49,16 @@ func (s *ValidateSkill) Execute(ctx context.Context, input map[string]any) (any,
 		return nil, err
 	}
 
-	valid, valErr := p.Validate(ctx)
-	if valErr != nil {
-		return map[string]any{"is_valid": false, "reason": valErr.Error()}, nil
+	result, err := p.Validate(ctx)
+	if err != nil {
+		// Fallback for explicit errors that weren't mapped into a ValidationResult by the provider.
+		return &domainAuth.ValidationResult{
+			Provider: providerName,
+			IsValid:  false,
+			Message:  err.Error(),
+		}, nil
 	}
-	return map[string]any{"is_valid": valid, "reason": ""}, nil
+	return result, nil
 }
 
 // WhoamiSkill returns the active identity information, IAM role or account ID for the provider.
@@ -87,15 +92,11 @@ func (s *WhoamiSkill) Execute(ctx context.Context, input map[string]any) (any, e
 		return nil, err
 	}
 
-	session, valErr := p.Whoami(ctx)
+	identity, valErr := p.Whoami(ctx)
 	if valErr != nil {
 		return nil, valErr
 	}
-	return map[string]any{
-		"account_id": session.AccountID,
-		"username":   session.Username,
-		"role":       session.Role,
-	}, nil
+	return identity, nil
 }
 
 // LoginSkill authenticates the machine to a specific provider.

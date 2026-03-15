@@ -3,10 +3,15 @@ package gcp
 import (
 	"context"
 
+	"encoding/json"
+	"fmt"
+
 	"multix/internal/domain/auth"
 	"multix/internal/domain/inventory"
 	"multix/internal/domain/k8s"
 	"multix/internal/platform/logger"
+
+	"golang.org/x/oauth2/google"
 )
 
 type Adapter struct {
@@ -30,19 +35,51 @@ func (a *Adapter) Login(ctx context.Context, creds auth.Credentials) (*auth.Sess
 	}, nil
 }
 
-func (a *Adapter) Validate(ctx context.Context) (bool, error) {
+func (a *Adapter) Validate(ctx context.Context) (*auth.ValidationResult, error) {
 	a.log.Info("Validating GCP application default credentials", "provider", "gcp")
-	return true, nil
+	creds, err := google.FindDefaultCredentials(ctx, "https://www.googleapis.com/auth/cloud-platform")
+	if err != nil {
+		return &auth.ValidationResult{
+			Provider: "gcp",
+			IsValid:  false,
+			Message:  fmt.Sprintf("ADC not found or invalid: %v", err),
+		}, nil
+	}
+
+	return &auth.ValidationResult{
+		Provider:  "gcp",
+		IsValid:   true,
+		AccountID: creds.ProjectID,
+		Message:   "Valid application default credentials found",
+	}, nil
 }
 
-func (a *Adapter) Whoami(ctx context.Context) (*auth.Session, error) {
-	a.log.Info("Retrieving GCP active account", "provider", "gcp")
-	return &auth.Session{
-		Provider:  "gcp",
-		AccountID: "my-gcp-project-123",
-		Username:  "stub-user@example.com",
-		Role:      "roles/editor",
-		IsValid:   true,
+func (a *Adapter) Whoami(ctx context.Context) (*auth.Identity, error) {
+	a.log.Info("Retrieving GCP active credentials context", "provider", "gcp")
+	creds, err := google.FindDefaultCredentials(ctx, "https://www.googleapis.com/auth/cloud-platform")
+	if err != nil {
+		return nil, fmt.Errorf("failed to find default credentials: %w", err)
+	}
+
+	principal := "unknown"
+	authSource := "application_default_credentials"
+
+	var credJSON map[string]any
+	if len(creds.JSON) > 0 {
+		if err := json.Unmarshal(creds.JSON, &credJSON); err == nil {
+			if email, ok := credJSON["client_email"].(string); ok {
+				principal = email
+				authSource = "service_account_key"
+			}
+		}
+	}
+
+	return &auth.Identity{
+		Provider:   "gcp",
+		AccountID:  creds.ProjectID,
+		ProjectID:  creds.ProjectID,
+		Principal:  principal,
+		AuthSource: authSource,
 	}, nil
 }
 
