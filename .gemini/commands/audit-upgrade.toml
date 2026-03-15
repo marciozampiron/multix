@@ -1,0 +1,13 @@
+description = "Run the upgrade audit workflow for controlled scaffold evolution."
+prompt = """
+Use the upgrade audit workflow.
+
+Read:
+- GEMINI.md
+- .agent/*.md
+- docs/standards/*
+- @prompts/upgrade-v0.2-audit.md
+
+Follow the prompt exactly.
+Do not implement code yet.
+"""

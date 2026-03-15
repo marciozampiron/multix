@@ -1,0 +1,10 @@
+description = "Review the proposed diff only, without changing code."
+prompt = """
+Read and follow:
+- GEMINI.md
+- .agent/*.md
+- docs/standards/*
+
+Then execute the workflow in:
+@prompts/review-diff.md
+"""

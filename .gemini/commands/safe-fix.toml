@@ -1,0 +1,10 @@
+description = "Apply a small and safe patch with minimal changes."
+prompt = """
+Read and follow:
+- GEMINI.md
+- .agent/*.md
+- docs/standards/*
+
+Then execute:
+@prompts/safe-fix.md
+"""

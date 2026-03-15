@@ -1,0 +1,10 @@
+description = "Audit the repo and propose a minimal patch plan only."
+prompt = """
+Read and follow:
+- GEMINI.md
+- .agent/*.md
+- docs/standards/*
+
+Then execute the workflow in:
+@prompts/upgrade-v0.2-audit.md
+"""

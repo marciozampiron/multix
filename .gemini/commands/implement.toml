@@ -1,0 +1,10 @@
+description = "Implement only the previously approved minimal patch."
+prompt = """
+Read and follow:
+- GEMINI.md
+- .agent/*.md
+- docs/standards/*
+
+Then execute the workflow in:
+@prompts/upgrade-v0.2-implement.md
+"""
