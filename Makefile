@@ -112,3 +112,19 @@ ai-review-comments:
 	@echo ""
 	@echo "Or open:"
 	@echo "  prompts/review-comments.md"
+
+.PHONY: ai-comments ai-review-comments
+
+ai-comments:
+	@echo "Run in Gemini CLI:"
+	@echo "  /comments"
+	@echo ""
+	@echo "Or open:"
+	@echo "  prompts/comment-pass.md"
+
+ai-review-comments:
+	@echo "Run in Gemini CLI:"
+	@echo "  /review-comments"
+	@echo ""
+	@echo "Or open:"
+	@echo "  prompts/review-comments.md"

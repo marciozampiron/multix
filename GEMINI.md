@@ -183,5 +183,27 @@ Recommended format:
 // Company: Hassan
 // Creator: Zamp
 // Created: 15/03/2026
-// Updated: 15/03/2026
 // Purpose: Executes the inventory scan use case for reusable platform and agent skill flows.
+```
+
+---
+
+## 8. Documentation-Only Pass Rule
+
+When asked to improve comments or documentation in the repository:
+- prefer a documentation-only pass
+- do not change business logic
+- do not refactor behavior
+- do not rename packages or symbols
+- do not move files
+- do not introduce new abstractions
+
+Documentation-only changes may include:
+- file headers in important Go files
+- Go doc comments for exported symbols
+- concise rationale comments for non-obvious code
+
+Avoid:
+- noisy comments
+- comments that describe obvious mechanics
+- over-commenting idiomatic Go code
