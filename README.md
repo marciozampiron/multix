@@ -76,8 +76,27 @@ Multix V0.2 supports dynamic Cloud mappings and Outputs via global flags:
 ./build/multix ai explain "CrashLoopBackOff" --provider gemini --output json
 ```
 
-### ✅ Manual Validation (v0.3-alpha Auth Providers)
+### 🔧 Local Auth Troubleshooting
 
+#### AWS local development notes
+- `AWS_REGION` (or shared config) is required for AWS SDK calls like STS
+- Example:
+  - `export AWS_REGION=us-east-1`
+- For local development outside EC2:
+  - `export AWS_EC2_METADATA_DISABLED=true`
+- If using SSO/profile:
+  - `export AWS_PROFILE=<profile>`
+
+#### GCP local development notes
+- `gcloud auth login` authenticates the gcloud CLI
+- `gcloud auth application-default login` authenticates Application Default Credentials for SDKs/apps
+- These are related but distinct
+- Example:
+  - `gcloud auth login`
+  - `gcloud auth application-default login`
+  - `gcloud config set project <project-id>`
+
+#### Manual examples
 You can manually smoke test the real AWS and GCP auth provider integrations using the following commands:
 
 ```bash
@@ -93,10 +112,6 @@ You can manually smoke test the real AWS and GCP auth provider integrations usin
 # Check GCP active credentials and project
 ./build/multix auth whoami --provider gcp --output table
 ```
-
-**Prerequisites:**
-- **AWS**: Requires active AWS credentials configured (e.g., via `~/.aws/credentials`, `AWS_ACCESS_KEY_ID`, or AWS SSO).
-- **GCP**: Requires active Application Default Credentials (e.g., via `gcloud auth application-default login` or `GOOGLE_APPLICATION_CREDENTIALS`). Depending on your credential source, GCP may provide a best-effort principal identity but will consistently resolve your `project_id`.
 
 ## 📐 Extending the Application
 
