@@ -9,11 +9,14 @@ package auth
 
 import (
 	"context"
+	"strings"
 
 	domainAuth "multix/internal/domain/auth"
 	"multix/internal/domain/skills"
-	"multix/internal/ports/outbound" // Import for ProviderRegistry
+	"multix/internal/ports/outbound"
 )
+
+const defaultCloudProvider = "aws"
 
 // ValidateSkill validates if the user's current cloud provider credentials are valid and active.
 type ValidateSkill struct {
@@ -38,12 +41,11 @@ func (s *ValidateSkill) InputSchema() any {
 				"description": "Cloud provider name (aws, gcp, azure, etc.)",
 			},
 		},
-		"required": []string{"provider"},
 	}
 }
 
 func (s *ValidateSkill) Execute(ctx context.Context, input map[string]any) (any, error) {
-	providerName, _ := input["provider"].(string)
+	providerName := resolveProvider(input)
 	p, err := s.providers.GetCloudAuthProvider(providerName)
 	if err != nil {
 		return nil, err
@@ -51,12 +53,7 @@ func (s *ValidateSkill) Execute(ctx context.Context, input map[string]any) (any,
 
 	result, err := p.Validate(ctx)
 	if err != nil {
-		// Fallback for explicit errors that weren't mapped into a ValidationResult by the provider.
-		return &domainAuth.ValidationResult{
-			Provider: providerName,
-			IsValid:  false,
-			Message:  err.Error(),
-		}, nil
+		return nil, err
 	}
 	return result, nil
 }
@@ -81,12 +78,11 @@ func (s *WhoamiSkill) InputSchema() any {
 		"properties": map[string]any{
 			"provider": map[string]any{"type": "string"},
 		},
-		"required": []string{"provider"},
 	}
 }
 
 func (s *WhoamiSkill) Execute(ctx context.Context, input map[string]any) (any, error) {
-	providerName, _ := input["provider"].(string)
+	providerName := resolveProvider(input)
 	p, err := s.providers.GetCloudAuthProvider(providerName)
 	if err != nil {
 		return nil, err
@@ -128,4 +124,12 @@ func (s *LoginSkill) Execute(ctx context.Context, input map[string]any) (any, er
 
 	session, valErr := p.Login(ctx, domainAuth.Credentials{})
 	return map[string]any{"provider": session.Provider, "valid": session.IsValid}, valErr
+}
+
+func resolveProvider(input map[string]any) string {
+	providerName, _ := input["provider"].(string)
+	if strings.TrimSpace(providerName) == "" {
+		return defaultCloudProvider
+	}
+	return providerName
 }
