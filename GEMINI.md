@@ -1,296 +1,127 @@
-# GEMINI.md — Multix Repository Instructions
+You are working inside the Multix repository.
 
-You are working inside the **Multix** repository.
+Upgrade the current scaffold from v0.1 to v0.2 while preserving the existing skills-first and agent-ready architecture.
 
-Multix is a **skills-first, agent-ready, multi-cloud CLI** written in Go, focused on:
-- DevOps
-- Cloud Engineering
-- Kubernetes
-- AI-assisted workflows
-- reusable skills for future AI agents
+IMPORTANT:
+- Make minimal, coherent changes.
+- Do not rewrite the whole repository.
+- Keep the current structure and improve it incrementally.
+- Respect GEMINI.md and all .agent/*.md rules.
 
-This repository must remain:
-- idiomatic Go
-- modular
-- fast to start
-- low-overhead
-- easy to evolve
-- open-source product quality
+## Goals for v0.2
 
----
+Implement the following improvements:
 
-## 1. Core Product Vision
+### 1. Provider Registry
+Replace "default provider" assumptions with explicit registries.
 
-Multix is not just a CLI.
-It is a **platform of reusable capabilities ("skills")** that can be consumed by:
+Create a provider registry layer that supports:
+- cloud auth providers
+- cloud inventory providers
+- kubernetes providers
+- AI providers
 
-- CLI commands
-- future API endpoints
-- future AI agents / tool-calling
-- future MCP-compatible adapters
+Required methods:
+- GetCloudAuthProvider(name string)
+- GetCloudInventoryProvider(name string)
+- GetKubernetesProvider(name string)
+- GetAIProvider(name string)
 
-### Golden Rule
-- **Agent thinks**
-- **Skill executes**
+Support at least:
+- aws
+- gcp
+- gemini
 
-The agent must never own the business logic.
-Business logic belongs to:
-- domain
-- application/use cases
-- reusable skills
+### 2. Command Flags
+Add `--provider` flag to relevant commands:
+- auth validate
+- auth whoami
+- inventory scan
+- inventory summary
+- k8s list-clusters
+- ai explain
+- ai terraform
 
----
+Provider defaults:
+- cloud default: aws
+- ai default: gemini
 
-## 2. Mandatory Architectural Rules
+### 3. Output Modes
+Add `--output` flag with support for:
+- json (default)
+- table
 
-### 2.1 Skills-first architecture
-The repository must be organized by **SKILLS / CAPABILITIES**, not by cloud provider.
+Create a rendering helper in:
+- `internal/adapters/inbound/cli/render.go`
 
-Correct:
-- `doctor`
-- `auth`
-- `inventory`
-- `k8s`
-- `ai`
-- `plugin`
+Keep rendering out of use cases and out of skill logic.
 
-Wrong:
-- organizing the entire project around `aws/`, `gcp/`, `azure/` as the primary axis
+### 4. Config Bootstrap
+Create an initial config bootstrap:
+- `internal/bootstrap/config.go`
+- `internal/domain/config/config.go`
 
-Cloud providers and AI providers must live behind:
-- ports/interfaces
-- adapters
-- explicit wiring
+Support:
+- app name
+- version
+- default cloud provider
+- default ai provider
+- default output mode
 
-### 2.2 Layering rules
-Use the following mental model:
+Use a simple in-memory/default config for now.
+Do NOT add Viper yet.
 
-CLI / API / Agent
-→ Skill / Capability / Tool
-→ Application Use Case
-→ Port (interface)
-→ Adapter / Provider
-→ External system (AWS, GCP, Gemini, etc.)
+### 5. Skill Input Support
+Update skill execution so that provider can be passed in input maps where relevant.
 
-### 2.3 Go layout rules
-Follow idiomatic Go repository structure:
-- `cmd/` for executable entrypoints
-- `internal/` for non-exported implementation
-- `internal/application/` for use cases
-- `internal/ports/` for contracts
-- `internal/adapters/` for inbound/outbound integrations
-- `internal/bootstrap/` for explicit wiring
-- avoid `pkg/` unless there is a strong, concrete reason
+Example:
+- `auth.validate` input can include `provider`
+- `inventory.scan` input can include `provider`
+- `k8s.list_clusters` input can include `provider`
+- `ai.explain` input can include `provider`
 
----
+### 6. Registry-Aware Skill Wiring
+Refactor `bootstrap/skills.go` so that skills can dynamically resolve providers based on input, using the provider registry, rather than using only default providers.
 
-## 3. Non-Negotiable Engineering Principles
+### 7. Agent Adapter Base
+Create:
+- `internal/adapters/inbound/agent/tool_adapter.go`
+- `internal/adapters/inbound/agent/manifest.go`
 
-- Prefer **idiomatic Go** over theoretical purity
-- Prefer **clarity** over cleverness
-- Prefer **explicit wiring** over magic
-- Prefer **small interfaces** near consumers
-- Prefer **composition** over inheritance
-- Prefer **pragmatic DDD Lite** over heavy enterprise DDD
-- Prefer **simple, stable contracts** over over-abstraction
-- Prefer **skills reusable by CLI/API/Agent** over agent-only logic
+This layer should:
+- expose all registered skills as tool-like manifests
+- provide a method to execute a skill by name and input
+- stay decoupled from Gemini/OpenAI specifics
+- prepare for future MCP integration
 
----
+### 8. Tests
+Add or update tests for:
+- provider registry
+- provider resolution by name
+- skill execution using explicit provider
+- output renderer (basic)
+- agent adapter manifest listing
 
-## 4. What You MUST Avoid
+### 9. README Update
+Update README to include:
+- provider flags
+- output flags
+- examples for aws/gcp/gemini
+- mention agent adapter base
 
-Do NOT:
-- create unnecessary interfaces
-- create service layers without real value
-- create manager/service/repository abstractions just by habit
-- over-engineer the MVP
-- put business logic inside Cobra command handlers
-- make the architecture provider-first
-- initialize all providers eagerly on startup
-- use reflection unless clearly justified
-- use native Go `.so` plugin loading in MVP
-- hardcode secrets or credentials
-- log secrets
-- introduce large dependencies without justification
+## Constraints
+- Keep idiomatic Go
+- Keep explicit wiring
+- Do not introduce heavy dependencies
+- Do not use Viper yet
+- Do not use native Go plugin loading
+- Do not over-engineer
+- Prefer small, focused diffs
 
----
-
-## 5. Skill Model (Very Important)
-
-A skill is a reusable capability of the platform with a stable input/output contract.
-
-A skill must be callable by:
-- CLI
-- future API
-- future AI agents
-
-Each skill should be:
-- small
-- composable
-- machine-friendly
-- deterministic when possible
-- easy to test
-- provider-agnostic when possible
-
-Naming convention:
-- `<domain>.<action>`
-
-Examples:
-- `doctor.run`
-- `auth.validate`
-- `auth.whoami`
-- `inventory.scan`
-- `inventory.summary`
-- `k8s.list_clusters`
-- `ai.explain`
-- `ai.generate_terraform`
-
----
-
-## 6. Current MVP Scope
-
-### Platform skills
-- doctor
-- auth
-- inventory
-- k8s
-- ai
-- plugin
-
-### Agent-ready skills
-- doctor.run
-- auth.validate
-- auth.whoami
-- inventory.scan
-- inventory.summary
-- k8s.list_clusters
-- ai.explain
-- ai.generate_terraform
-
----
-
-## 7. Code Style Rules
-
-Always follow:
-- idiomatic Go
-- Effective Go
-- small functions
-- clear names
-- minimal nesting
-- error-first handling
-- `context.Context` in I/O or provider flows
-- structured logging
-- explicit dependencies
-
-### Comments policy
-Do NOT over-comment.
-Comments are allowed only when they explain:
-- why something exists
-- tradeoffs
-- non-obvious constraints
-- public exported behavior when helpful
-
-Avoid useless comments like:
-- "increment counter"
-- "call function"
-- "set variable"
-
----
-
-## 8. Performance Rules
-
-Multix is a CLI. Fast startup matters.
-
-Always optimize for:
-- fast startup
-- low memory overhead
-- lazy provider usage
-- avoiding unnecessary allocations
-- avoiding reflection
-- avoiding eager SDK initialization
-- keeping central packages lightweight
-
-If a provider SDK is heavy:
-- isolate it in outbound adapters
-- avoid pulling it into core layers
-
----
-
-## 9. Security Rules
-
-- Never log secrets
-- Never commit credentials
-- Keep config separate from secrets
-- Mask sensitive data in logs
-- Validate inputs
-- Prefer least-privilege assumptions
-- Prepare for `govulncheck`
-- Avoid risky shell execution without explicit reason
-
----
-
-## 10. Build & Workflow Rules
-
-Prefer the Makefile:
-- `make build`
-- `make run`
-- `make test`
-- `make test-race`
-- `make fmt`
-- `make vet`
-- `make vuln`
-- `make tidy`
-
-Do not invent random build commands if the Makefile already covers them.
-
----
-
-## 11. File Change Rules
-
-When making changes:
-1. preserve the skills-first architecture
-2. avoid unrelated refactors
-3. keep diffs minimal and coherent
-4. do not rename packages without strong reason
-5. if you add a skill:
-   - add or reuse use case
-   - register it
-   - expose it if needed
-   - add test(s)
-6. if you add a provider:
-   - implement the correct port
-   - isolate SDK details in adapter
-   - avoid leaking provider details into application layer
-
----
-
-## 12. Preferred Output Behavior for AI Assistance
-
-When asked to modify the codebase:
-- first understand the current structure
-- then propose the smallest coherent change
-- preserve architectural integrity
-- explain tradeoffs briefly
-- do not rewrite the whole repo unless explicitly asked
-
-When asked to add a feature:
-- map it to:
-  - domain
-  - application use case
-  - port (if needed)
-  - adapter (if needed)
-  - skill (if needed)
-  - CLI command (if needed)
-
----
-
-## 13. Additional Context Files
-
-Read these files as additional project instructions:
-
-@./.agent/ARCHITECTURE.md
-@./.agent/SKILL.md
-@./.agent/CODING_STANDARDS.md
-@./.agent/COMMANDS.md
-@./.agent/TESTING.md
-@./.agent/SAFETY.md
+## Delivery format
+Return:
+1. files to change
+2. files to add
+3. updated code for each file
+4. short rationale for each change
+5. final sanity-check notes
