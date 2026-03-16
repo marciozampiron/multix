@@ -65,6 +65,8 @@ func (a *App) Wire() *cobra.Command {
 		h.Register()
 	}
 
+	a.RootCmd.AddCommand(cli.NewServeCmd(a.Logger))
+
 	root.RegisterVersionCmd(a.RootCmd)
 	return a.RootCmd
 }
