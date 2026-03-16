@@ -11,6 +11,7 @@ import (
 	"multix/internal/adapters/outbound/ai/gemini"
 	"multix/internal/adapters/outbound/cloud/aws"
 	"multix/internal/adapters/outbound/cloud/gcp"
+	"multix/internal/adapters/outbound/cloud/oci"
 	"multix/internal/platform/logger"
 	"multix/internal/ports/outbound"
 )
@@ -22,6 +23,7 @@ func BuildProviderRegistry(log logger.Logger) outbound.ProviderRegistry {
 	// Initialize adapters.
 	awsAdapter := aws.NewAdapter(log)
 	gcpAdapter := gcp.NewAdapter(log)
+	ociAdapter := oci.NewAdapter(log)
 	geminiAdapter := gemini.NewAdapter(log)
 
 	// Register AWS capabilities.
@@ -33,6 +35,11 @@ func BuildProviderRegistry(log logger.Logger) outbound.ProviderRegistry {
 	providers.RegisterAuth("gcp", gcpAdapter)
 	providers.RegisterInventory("gcp", gcpAdapter)
 	providers.RegisterK8s("gcp", gcpAdapter)
+
+	// Register OCI capabilities.
+	providers.RegisterAuth("oci", ociAdapter)
+	providers.RegisterInventory("oci", ociAdapter)
+	providers.RegisterK8s("oci", ociAdapter)
 
 	// Register AI capabilities.
 	providers.RegisterAI("gemini", geminiAdapter)

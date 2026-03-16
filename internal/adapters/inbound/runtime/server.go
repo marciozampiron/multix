@@ -70,7 +70,7 @@ func (s *Server) capabilitiesHandler(w http.ResponseWriter, r *http.Request) {
 			"tool_execution",
 			"dynamic_manifests",
 		},
-		"supported_providers": []string{"aws", "gcp"},
+		"supported_providers": []string{"aws", "gcp", "oci"},
 	}
 
 	w.Header().Set("Content-Type", "application/json")
