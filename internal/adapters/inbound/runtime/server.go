@@ -52,7 +52,14 @@ func (s *Server) registerRoutes() {
 func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"ok","service":"multix","mode":"runtime"}`))
+
+	response := map[string]string{
+		"status":  "ok",
+		"service": "multix",
+		"mode":    "runtime",
+	}
+
+	_ = json.NewEncoder(w).Encode(response)
 }
 
 // capabilitiesHandler returns a JSON matrix of the runtime capabilities.
