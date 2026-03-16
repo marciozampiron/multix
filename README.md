@@ -26,11 +26,13 @@ Core principle:
 - GCP whoami enrichment: ADC first, env fallback, optional local `gcloud` enrichment
 - Tests, build, vet, and fmt passing locally
 
-**Planned / next target (v0.4-alpha):**
+**Implemented target (v0.4-alpha):**
 - OCI auth provider (preview)
 - `multix serve` local runtime
 - Capability matrix endpoint
 - Agent runtime endpoints (health, manifests, tool execution)
+
+**Planned / next target (v0.5-alpha):**
 - Inventory real providers for AWS, GCP, OCI
 
 ## 3. Architectural Philosophy
@@ -56,6 +58,20 @@ Skills implement a JSON-capable contract and can be executed consistently across
 - Agent tooling consumes manifests generated from the same registry
 
 **Register once. Expose everywhere.**
+
+## Runtime (v0.4-alpha)
+
+`multix serve` exposes the local HTTP runtime
+
+Runtime endpoints:
+- `GET /health`
+- `GET /tools`
+- `POST /execute`
+- `GET /capabilities`
+
+Links:
+- [docs/runtime-architecture.md](docs/runtime-architecture.md)
+- [docs/quickstart-agent-runtime.md](docs/quickstart-agent-runtime.md)
 
 ## 5. Project Layout
 
@@ -151,7 +167,7 @@ Real, validated auth commands:
 - Local auth troubleshooting docs
 - Real local smoke validation
 
-### v0.4-alpha — OCI Auth + Agent Runtime (`multix serve`) (planned)
+### v0.4-alpha — OCI Auth + Agent Runtime (`multix serve`)
 - OCI auth provider (preview)
 - `multix serve`
 - Health endpoint
