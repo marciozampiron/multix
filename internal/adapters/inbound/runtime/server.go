@@ -55,7 +55,7 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	w.Write([]byte(`{"status":"ok"}`))
+	w.Write([]byte(`{"status":"ok","service":"multix","mode":"runtime"}`))
 }
 
 // toolsHandler dynamically returns agent tool manifests based on registered skills.

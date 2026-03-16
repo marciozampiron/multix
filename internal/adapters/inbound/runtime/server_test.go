@@ -38,6 +38,12 @@ func TestHealthHandler(t *testing.T) {
 	if status, ok := response["status"]; !ok || status != "ok" {
 		t.Errorf("handler returned unexpected body: got %v", rr.Body.String())
 	}
+	if service, ok := response["service"]; !ok || service != "multix" {
+		t.Errorf("handler returned unexpected service: got %v", rr.Body.String())
+	}
+	if mode, ok := response["mode"]; !ok || mode != "runtime" {
+		t.Errorf("handler returned unexpected mode: got %v", rr.Body.String())
+	}
 }
 
 func TestHealthHandler_WrongMethod(t *testing.T) {
