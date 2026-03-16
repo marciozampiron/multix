@@ -89,32 +89,69 @@ func (s *Server) toolsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
+// executeRequest defines the canonical payload for the /execute endpoint.
+type executeRequest struct {
+	Skill    string         `json:"skill"`
+	Provider string         `json:"provider,omitempty"`
+	Params   map[string]any `json:"params,omitempty"`
+}
+
+// executeSuccessResponse defines the canonical success payload.
+type executeSuccessResponse struct {
+	Ok       bool           `json:"ok"`
+	Skill    string         `json:"skill"`
+	Provider string         `json:"provider,omitempty"`
+	Result   any            `json:"result"`
+}
+
+// executeErrorResponse defines the canonical error payload.
+type executeErrorResponse struct {
+	Ok    bool   `json:"ok"`
+	Error string `json:"error"`
+}
+
 // executeHandler allows dynamic execution of skills via HTTP POST using JSON payloads.
 func (s *Server) executeHandler(w http.ResponseWriter, r *http.Request) {
-	var reqPayload struct {
-		Tool      string         `json:"tool"`
-		Arguments map[string]any `json:"arguments"`
-	}
+	var req executeRequest
 
-	if err := json.NewDecoder(r.Body).Decode(&reqPayload); err != nil {
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		s.logger.Error("Failed to decode execute request payload", err)
+		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusBadRequest)
-		w.Write([]byte(`{"error":"invalid json format"}`))
+		json.NewEncoder(w).Encode(executeErrorResponse{Ok: false, Error: "invalid json format"})
 		return
 	}
 
-	result, err := s.agent.Execute(r.Context(), reqPayload.Tool, reqPayload.Arguments)
+	if req.Skill == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(executeErrorResponse{Ok: false, Error: "missing skill"})
+		return
+	}
+
+	if req.Params == nil {
+		req.Params = map[string]any{}
+	}
+
+	// We still use s.agent.Execute under the hood because ToolAdapter abstractly executes from the registry
+	result, err := s.agent.Execute(r.Context(), req.Skill, req.Params)
 	
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
-		s.logger.Error("Failed to execute tool", err, "tool", reqPayload.Tool)
+		s.logger.Error("Failed to execute tool", err, "skill", req.Skill)
 		w.WriteHeader(http.StatusInternalServerError)
-		json.NewEncoder(w).Encode(map[string]any{"error": err.Error()})
+		json.NewEncoder(w).Encode(executeErrorResponse{Ok: false, Error: err.Error()})
 		return
 	}
 
 	w.WriteHeader(http.StatusOK)
-	if err := json.NewEncoder(w).Encode(map[string]any{"result": result}); err != nil {
+	resp := executeSuccessResponse{
+		Ok:       true,
+		Skill:    req.Skill,
+		Provider: req.Provider,
+		Result:   result,
+	}
+	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		s.logger.Error("Failed to encode execute response", err)
 	}
 }
