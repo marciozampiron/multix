@@ -9,6 +9,7 @@ package bootstrap
 
 import (
 	"multix/cmd/root"
+	"multix/internal/adapters/inbound/agent"
 	"multix/internal/adapters/inbound/cli"
 	"multix/internal/application/skills"
 	"multix/internal/domain/config"
@@ -64,6 +65,9 @@ func (a *App) Wire() *cobra.Command {
 	for _, h := range handlers {
 		h.Register()
 	}
+
+	agentAdapter := agent.NewToolAdapter(a.SkillRegistry, a.SkillExecutor)
+	a.RootCmd.AddCommand(cli.NewServeCmd(a.Logger, agentAdapter))
 
 	root.RegisterVersionCmd(a.RootCmd)
 	return a.RootCmd
