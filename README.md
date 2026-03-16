@@ -1,138 +1,211 @@
-# Multix CLI (Skills-First & Agent-Ready)
+# MULTIX — AI-Native Multi-Cloud Skill Runtime
 
-**Multix** is an Enterprise-Grade Multi-cloud CLI platform engineered for DevOps, Kubernetes, and Generative AI integration.
+## 1. Title + Tagline
 
-The architecture strictly adheres to a **Skills-First Capability System** built atop Go 1.25+, Cobra, and a clean Hexagonal/DDD-lite topology.
+Enterprise-grade multi-cloud operations for humans, command-line workflows, and AI agents.
 
-## 🧠 Architectural Philosophy
+## 2. What MULTIX Is
 
-Unlike traditional tools mapped directly to Cloud Provider endpoints, Multix views the system through **Reusable Universal Skills**. 
+MULTIX is not just a CLI. It is a reusable execution runtime for operational skills that can be invoked consistently across multiple surfaces:
+- CLI commands
+- AI agents and function-calling adapters
+- Future local runtime endpoints (`multix serve`)
+- Future APIs and automation layers
 
-The fundamental rule of the platform: 
-> **Agent thinks and orchestrates / Skill executes.**
+Core principle:
+> **Agent thinks and orchestrates. Skill executes.**
 
-### The Universal Contract
-Every business use case (a "Skill") implements a JSON-capable interface (`domain/skills/Skill`). This allows the *exact same underlying Go binary logic* to be invoked seamlessly by:
-1. **The CLI Terminal** (via Cobra handlers translating flags to JSON)
-2. **AI Agents** (via LLM function calling and Tool-Usage features on Gemini/OpenAI)
-3. **External APIs**
+**Implemented and validated today:**
+- Go project with Cobra CLI
+- Skills-first architecture and universal skill contract
+- Skill registry and skill executor
+- Provider registry with normalized provider names
+- Agent tool adapter and tool manifest generation
+- Real AWS auth skills: `auth.validate`, `auth.whoami`
+- Real GCP auth skills: `auth.validate`, `auth.whoami`
+- GCP whoami enrichment: ADC first, env fallback, optional local `gcloud` enrichment
+- Tests, build, vet, and fmt passing locally
 
-## 📂 Project Layout
+**Planned / next target (v0.4-alpha):**
+- OCI auth provider (preview)
+- `multix serve` local runtime
+- Capability matrix endpoint
+- Agent runtime endpoints (health, manifests, tool execution)
+- Inventory real providers for AWS, GCP, OCI
+
+## 3. Architectural Philosophy
+
+Traditional CLIs are provider-endpoint-centric. MULTIX is capability-centric and built around **reusable skills** that are stable across providers and execution surfaces.
+
+Examples of skills (some implemented, some foundational/planned):
+- `auth.validate`
+- `auth.whoami`
+- `inventory.scan`
+- `inventory.summary`
+- `k8s.list_clusters`
+- `ai.explain`
+
+The CLI is only one surface. Skills are the product.
+
+## 4. Universal Skill Contract
+
+Skills implement a JSON-capable contract and can be executed consistently across surfaces.
+
+- CLI handlers translate flags into a JSON payload
+- The Skill Executor runs the capability
+- Agent tooling consumes manifests generated from the same registry
+
+**Register once. Expose everywhere.**
+
+## 5. Project Layout
 
 ```text
 multix/
-├── GEMINI.md                   # Agent governance instructions
-├── .agent/                     # Specific LLM context files (SKILL, ARCHITECTURE, etc)
+├── GEMINI.md
+├── .agent/
 ├── cmd/
-│   ├── multix/                 # The main entrypoint, minimal and clean
-│   └── root/                   # Base Cobra CLI root commands
+├── docs/
 ├── internal/
-│   ├── domain/                 # Core domain models and the Universal Skill Contract
-│   ├── application/            # The actual Go logic wrapping business capabilities
-│   ├── ports/
-│   │   ├── inbound/            # Interfaces for CLI Handlers and Agent Tool Handlers
-│   │   └── outbound/           # Required interfaces (Provider Registry)
-│   ├── adapters/
-│   │   ├── inbound/cli/        # Cobra CLI Handlers
-│   │   ├── inbound/agent/      # Agent Tool Adapter Base (manifests generation)
-│   │   └── outbound/           # Provider implementations (aws, gcp, gemini)
-│   └── bootstrap/              # High-performance static dependency injection (Wiring)
-├── Makefile                    # Developer workflow automation
-└── README.md
+├── pkg/
+├── prompts/
+├── test/
+├── Makefile
+├── README.md
+├── go.mod
+└── go.sum
 ```
 
-## 🛠️ Quick Start
+## 6. Quick Start
 
 **Prerequisites:** Go 1.25+
 
 ```bash
-# Clone the repository and fetch dependencies
 go mod tidy
-
-# Build the CLI via the Makefile
 make build
-
-# Verify installation
 ./build/multix version
 ```
 
-### Running CLI Commands (V0.2)
+## 7. Current CLI Usage
 
-Multix V0.2 supports dynamic Cloud mappings and Outputs via global flags:
-- `--provider [aws|gcp]`
+Common global flags:
+- `--provider`
 - `--output [json|table]`
 
-```bash
-# Authenticate against a cloud provider
-./build/multix auth login --provider gcp
+Provider values currently vary by skill:
+- Cloud providers: `aws`, `gcp`
+- AI-specific provider values: `gemini`
 
-# Discover assets across your estate (AWS is default if omitted)
-./build/multix inventory list --service compute --provider aws --output json
-
-# Fetch your managed Kubernetes clusters dynamically
-./build/multix k8s clusters --provider gcp --output table
-
-# Ask the embedded AI Agent to explain concepts
-./build/multix ai explain "CrashLoopBackOff" --provider gemini --output json
-```
-
-### 🔧 Local Auth Troubleshooting
-
-#### AWS local development notes
-- `AWS_REGION` (or shared config) is required for AWS SDK calls like STS
-- Example:
-  - `export AWS_REGION=us-east-1`
-- For local development outside EC2:
-  - `export AWS_EC2_METADATA_DISABLED=true`
-- If using SSO/profile:
-  - `export AWS_PROFILE=<profile>`
-
-#### GCP local development notes
-- `gcloud auth login` authenticates the gcloud CLI
-- `gcloud auth application-default login` authenticates Application Default Credentials for SDKs/apps
-- These are related but distinct
-- Example:
-  - `gcloud auth login`
-  - `gcloud auth application-default login`
-  - `gcloud config set project <project-id>`
-
-#### Manual examples
-You can manually smoke test the real AWS and GCP auth provider integrations using the following commands:
+Real, validated auth commands:
 
 ```bash
-# Validate AWS credentials
 ./build/multix auth validate --provider aws --output json
-
-# Check AWS caller identity
 ./build/multix auth whoami --provider aws --output table
-
-# Validate GCP application default credentials
 ./build/multix auth validate --provider gcp --output json
-
-# Check GCP active credentials and project
 ./build/multix auth whoami --provider gcp --output table
 ```
 
-## 📐 Extending the Application
+## 8. Local Auth Troubleshooting
 
-To add a new skill to the platform:
-1. **Define the Skill**: Create a struct in `internal/application/your_domain/` that implements `skills.Skill`. Define its name, description, parameters schema, and execute block.
-2. **Register It**: Add it to `internal/bootstrap/container.go` inside the `SkillRegistry`.
-3. **Expose It**: Add a `cobra.Command` inside `internal/adapters/inbound/cli/` that passes flags into the executor. Once registered, it is automatically exposed to the Agent Tooling module.
+### AWS notes
+- AWS SDK for Go v2 requires region and credentials
+- Recommended environment for local development:
+- `export AWS_REGION=us-east-1`
+- `export AWS_EC2_METADATA_DISABLED=true`
+- `export AWS_PROFILE=<profile>`
 
-## 🚀 Roadmap (MVP -> Beta -> GA)
+### GCP notes
+- `gcloud auth login` authenticates the gcloud CLI
+- `gcloud auth application-default login` authenticates Application Default Credentials for SDKs/apps
+- These are related but distinct
+- Recommended local setup:
+- `gcloud auth login`
+- `gcloud auth application-default login`
+- `gcloud config set project <project-id>`
 
-### Phase 1: MVP (Complete)
-- Core Foundation: Extensible project layout with DDD Lite, Ports & Adapters, and explicit wiring.
-- Core Skills: `doctor.run`, `auth.validate`, `auth.whoami`.
-- Cloud Assets: `inventory.scan`, `inventory.summary`, `k8s.list_clusters`.
-- Agent-Ready Mechanism: Input schemas mapping to LLM payloads.
+## 9. Product Evolution / Release Journey
 
-### Phase 2: Beta
-- Provider Enhancements: Real implementations for GCP, Azure, and OCI interfaces.
-- Generative AI Integration: Real payload exchange with Gemini/OpenAI using the Agent Handlers for autonomous operations (`ai.generate_terraform`).
-- Plugin Capability: Expose dynamic loading of pre-compiled binaries via RPC or standard binary invoking.
+### v0.1-alpha — Foundation
+- Go module and Cobra bootstrap
+- DDD-lite / Hexagonal layout
+- Makefile workflow
+- Base repository standards
 
-### Phase 3: GA (General Availability)
-- Cost Estimation: Predictive analytics routines (`cost.estimate`).
-- Advanced Security: Code-level static security and compliance assessments (`security.assess`).
+### v0.2-alpha — Skills-First + Agent-Ready
+- Universal skill contract
+- Skill registry and skill executor
+- CLI skill dispatch
+- Agent tool adapter
+- Tool manifest generation
+- Provider abstraction foundations
+
+### v0.3-alpha — Real Auth (AWS + GCP)
+- Real AWS `auth.validate` and `auth.whoami`
+- Real GCP `auth.validate` and `auth.whoami`
+- Provider registry normalization
+- Expanded tests
+
+### v0.3.1-alpha — GCP Polish + DX Hardening
+- GCP log deduplication
+- GCP whoami enrichment (ADC + env + optional `gcloud`)
+- Command runner seam for tests
+- Local auth troubleshooting docs
+- Real local smoke validation
+
+### v0.4-alpha — OCI Auth + Agent Runtime (`multix serve`) (planned)
+- OCI auth provider (preview)
+- `multix serve`
+- Health endpoint
+- Manifests endpoint
+- Tool execution endpoint
+- Capability matrix endpoint
+- Stronger positioning as a runtime for humans and agents
+
+## 10. Forward Roadmap
+
+### v0.5-alpha — Real Inventory
+- AWS: EC2 + S3
+- GCP: Compute + Cloud Storage
+- OCI: Compute + Object Storage
+
+### v0.6-alpha — Kubernetes Real Integrations
+- EKS
+- GKE
+- OKE
+
+### v0.7-alpha — Golden Paths / Operational Skills
+- `doctor.auth`
+- `doctor.k8s`
+- `k8s.cluster-health`
+- `landingzone.audit`
+- `security.identity-posture`
+- `cost.quick-scan`
+
+### v1.0.0-beta — Enterprise Hardening
+- Stable provider contracts
+- Stable skill contracts
+- Hardened runtime
+- Plugin story / extension model
+- Enterprise docs + skill catalog
+
+## 11. Extending the Platform
+
+1. Create a skill in `internal/application/<domain>/`.
+2. Register it in `internal/bootstrap/skills.go`.
+3. Add a CLI handler in `internal/adapters/inbound/cli/`.
+4. Agent manifests are generated automatically once the skill is registered.
+
+**Register once. Expose everywhere.**
+
+## 12. Strategic Direction
+
+MULTIX is not just a multi-cloud CLI. It is becoming:
+- A universal multi-cloud skill runtime
+- A safe execution surface for AI agents
+- A foundation for enterprise operational golden paths
+- Future-ready for MCP-style tool ecosystems
+
+In practical terms, MULTIX is evolving from a CLI into a local execution runtime for portable, provider-aware operational skills.
+
+## 13. License
+
+Define your preferred license here (Apache-2.0, MIT, or internal enterprise license).
