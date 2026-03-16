@@ -1,4 +1,9 @@
 // File: internal/adapters/inbound/runtime/server_test.go
+// Company: Hassan
+// Creator: Zamp
+// Created: 15/03/2026
+// Purpose: Unit tests for the MULTIX HTTP runtime server.
+
 package runtime
 
 import (
