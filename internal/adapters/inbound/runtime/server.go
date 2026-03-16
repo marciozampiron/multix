@@ -42,18 +42,14 @@ func NewServer(logger logger.Logger, adapter *agent.ToolAdapter, port int) *Serv
 
 // registerRoutes wires up all HTTP endpoints.
 func (s *Server) registerRoutes() {
-	s.mux.HandleFunc("/health", s.healthHandler)
-	s.mux.HandleFunc("/tools", s.toolsHandler)
-	s.mux.HandleFunc("/execute", s.executeHandler)
-	s.mux.HandleFunc("/capabilities", s.capabilitiesHandler)
+	s.mux.HandleFunc("GET /health", s.healthHandler)
+	s.mux.HandleFunc("GET /tools", s.toolsHandler)
+	s.mux.HandleFunc("POST /execute", s.executeHandler)
+	s.mux.HandleFunc("GET /capabilities", s.capabilitiesHandler)
 }
 
 // healthHandler provides a basic liveness probe.
 func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte(`{"status":"ok","service":"multix","mode":"runtime"}`))
@@ -61,11 +57,6 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 
 // capabilitiesHandler returns a JSON matrix of the runtime capabilities.
 func (s *Server) capabilitiesHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	payload := map[string]any{
 		"api_version": "v1",
 		"capabilities": []string{
@@ -84,11 +75,6 @@ func (s *Server) capabilitiesHandler(w http.ResponseWriter, r *http.Request) {
 
 // toolsHandler dynamically returns agent tool manifests based on registered skills.
 func (s *Server) toolsHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	manifests := s.agent.Manifests()
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(manifests); err != nil {
@@ -98,11 +84,6 @@ func (s *Server) toolsHandler(w http.ResponseWriter, r *http.Request) {
 
 // executeHandler allows dynamic execution of skills via HTTP POST using JSON payloads.
 func (s *Server) executeHandler(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodPost {
-		w.WriteHeader(http.StatusMethodNotAllowed)
-		return
-	}
-
 	var reqPayload struct {
 		Tool      string         `json:"tool"`
 		Arguments map[string]any `json:"arguments"`
