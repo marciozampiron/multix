@@ -6,7 +6,7 @@ BUILD_DIR:=build
 GO:=go
 GOFLAGS:=-ldflags "-s -w -X multix/pkg/version.Version=$(VERSION)"
 
-.PHONY: all build run test test-race lint fmt vet vuln tidy clean install help
+.PHONY: all build run test test-race smoke-oci lint fmt vet vuln tidy clean install help
 .PHONY: ai-help ai-plan ai-implement ai-review ai-safe-fix ai-prompts ai-comments ai-review-comments
 
 all: clean fmt vet tidy test build
@@ -27,6 +27,10 @@ test: ## Run unit tests
 test-race: ## Run tests with race detector
 	@echo "==> Running tests with race detector..."
 	@$(GO) test -v ./... -race -cover
+
+smoke-oci: ## Run OCI end-to-end smoke tests
+	@echo "==> Running OCI smoke tests..."
+	@bash scripts/e2e/oci_smoke.sh
 
 fmt: ## Run go fmt
 	@echo "==> Formatting code..."
