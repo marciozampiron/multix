@@ -13,6 +13,7 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
@@ -133,13 +134,25 @@ func (s *Server) executeHandler(w http.ResponseWriter, r *http.Request) {
 		req.Params = map[string]any{}
 	}
 
+	if req.Provider != "" {
+		if _, ok := req.Params["provider"]; !ok {
+			req.Params["provider"] = req.Provider
+		}
+	}
+
 	// We still use s.agent.Execute under the hood because ToolAdapter abstractly executes from the registry
 	result, err := s.agent.Execute(r.Context(), req.Skill, req.Params)
 	
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
 		s.logger.Error("Failed to execute tool", err, "skill", req.Skill)
-		w.WriteHeader(http.StatusInternalServerError)
+		
+		if strings.Contains(strings.ToLower(err.Error()), "not found") {
+			w.WriteHeader(http.StatusNotFound)
+		} else {
+			w.WriteHeader(http.StatusInternalServerError)
+		}
+		
 		json.NewEncoder(w).Encode(executeErrorResponse{Ok: false, Error: err.Error()})
 		return
 	}

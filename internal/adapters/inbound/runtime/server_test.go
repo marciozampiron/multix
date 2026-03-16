@@ -25,7 +25,12 @@ func (m *mockSkill) Name() string { return "test.skill" }
 func (m *mockSkill) Description() string { return "Mock skill" }
 func (m *mockSkill) InputSchema() any { return nil }
 func (m *mockSkill) Execute(ctx context.Context, input map[string]any) (any, error) {
-	return map[string]string{"msg": "hello from mock", "echo_key": input["key"].(string)}, nil
+	provider, _ := input["provider"].(string)
+	return map[string]string{
+		"msg": "hello from mock", 
+		"echo_key": input["key"].(string),
+		"echo_provider": provider,
+	}, nil
 }
 
 func TestHealthHandler(t *testing.T) {
@@ -149,6 +154,11 @@ func TestExecuteHandler_Success(t *testing.T) {
 	if !resp.Ok || resp.Skill != "test.skill" || resp.Provider != "aws" {
 		t.Errorf("unexpected success envelope: %+v", resp)
 	}
+
+	resultMap, ok := resp.Result.(map[string]any)
+	if !ok || resultMap["echo_provider"] != "aws" {
+		t.Errorf("expected provider to be injected into params, got: %+v", resp.Result)
+	}
 }
 
 func TestExecuteHandler_InvalidJSON(t *testing.T) {
@@ -201,11 +211,9 @@ func TestExecuteHandler_UnknownSkill(t *testing.T) {
 	rr := httptest.NewRecorder()
 	s.mux.ServeHTTP(rr, req)
 
-	// In absence of a real active 'invalid.skill' in the registry, the agent executor will return error 'skill not found'
-	// The user specified "404 Not Found if feasible, 500 otherwise". By default, executor returns an error, 
-	// which our handler maps to 500 with {ok: false}. 
-	if rr.Code != http.StatusInternalServerError {
-		t.Errorf("expected 500 for missing real skill resolution, got %d", rr.Code)
+	// The executeHandler string matches on "not found" mapped to 404. 
+	if rr.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for missing real skill resolution, got %d", rr.Code)
 	}
 
 	var resp executeErrorResponse
