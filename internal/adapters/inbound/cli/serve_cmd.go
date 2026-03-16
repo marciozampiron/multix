@@ -8,31 +8,34 @@ package cli
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
+	"multix/internal/adapters/inbound/agent"
+	domainSkills "multix/internal/domain/skills"
 	"multix/internal/platform/logger"
 
 	"github.com/spf13/cobra"
 )
 
 // NewServeCmd initializes the 'serve' command.
-func NewServeCmd(logger logger.Logger) *cobra.Command {
+func NewServeCmd(logger logger.Logger, registry *domainSkills.Registry) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Start the MULTIX skill runtime server",
 		Long:  "Starts a local HTTP server exposing agent tools, execution endpoints, and capabilities.",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runServe(logger)
+			return runServe(logger, registry)
 		},
 	}
 	return cmd
 }
 
-func runServe(logger logger.Logger) error {
+func runServe(logger logger.Logger, registry *domainSkills.Registry) error {
 	port := "8080"
 	logger.Info("Starting MULTIX runtime", "port", port)
 
@@ -42,6 +45,17 @@ func runServe(logger logger.Logger) error {
 	mux.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 		w.Write([]byte(`{"status":"ok"}`))
+	})
+
+	mux.HandleFunc("/tools", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
+
+		manifests := agent.GenerateManifests(registry)
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(manifests)
 	})
 
 	srv := &http.Server{
