@@ -17,25 +17,24 @@ import (
 	"time"
 
 	"multix/internal/adapters/inbound/agent"
-	domainSkills "multix/internal/domain/skills"
 	"multix/internal/platform/logger"
 )
 
 // Server represents the local MULTIX HTTP runtime.
 type Server struct {
-	logger   logger.Logger
-	registry *domainSkills.Registry
-	mux      *http.ServeMux
-	port     int
+	logger logger.Logger
+	agent  *agent.ToolAdapter
+	mux    *http.ServeMux
+	port   int
 }
 
 // NewServer initializes a new runtime Server.
-func NewServer(logger logger.Logger, registry *domainSkills.Registry, port int) *Server {
+func NewServer(logger logger.Logger, adapter *agent.ToolAdapter, port int) *Server {
 	s := &Server{
-		logger:   logger,
-		registry: registry,
-		mux:      http.NewServeMux(),
-		port:     port,
+		logger: logger,
+		agent:  adapter,
+		mux:    http.NewServeMux(),
+		port:   port,
 	}
 	s.registerRoutes()
 	return s
@@ -45,6 +44,8 @@ func NewServer(logger logger.Logger, registry *domainSkills.Registry, port int) 
 func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("/health", s.healthHandler)
 	s.mux.HandleFunc("/tools", s.toolsHandler)
+	s.mux.HandleFunc("/execute", s.executeHandler)
+	s.mux.HandleFunc("/capabilities", s.capabilitiesHandler)
 }
 
 // healthHandler provides a basic liveness probe.
@@ -58,6 +59,29 @@ func (s *Server) healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"status":"ok","service":"multix","mode":"runtime"}`))
 }
 
+// capabilitiesHandler returns a JSON matrix of the runtime capabilities.
+func (s *Server) capabilitiesHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	payload := map[string]any{
+		"api_version": "v1",
+		"capabilities": []string{
+			"tool_execution",
+			"dynamic_manifests",
+		},
+		"supported_providers": []string{"aws", "gcp"},
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		s.logger.Error("Failed to encode capabilities response", err)
+	}
+}
+
 // toolsHandler dynamically returns agent tool manifests based on registered skills.
 func (s *Server) toolsHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet {
@@ -65,10 +89,45 @@ func (s *Server) toolsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	manifests := agent.GenerateManifests(s.registry)
+	manifests := s.agent.Manifests()
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(manifests); err != nil {
 		s.logger.Error("Failed to encode tool manifests", err)
+	}
+}
+
+// executeHandler allows dynamic execution of skills via HTTP POST using JSON payloads.
+func (s *Server) executeHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
+
+	var reqPayload struct {
+		Tool      string         `json:"tool"`
+		Arguments map[string]any `json:"arguments"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&reqPayload); err != nil {
+		s.logger.Error("Failed to decode execute request payload", err)
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte(`{"error":"invalid json format"}`))
+		return
+	}
+
+	result, err := s.agent.Execute(r.Context(), reqPayload.Tool, reqPayload.Arguments)
+	
+	w.Header().Set("Content-Type", "application/json")
+	if err != nil {
+		s.logger.Error("Failed to execute tool", err, "tool", reqPayload.Tool)
+		w.WriteHeader(http.StatusInternalServerError)
+		json.NewEncoder(w).Encode(map[string]any{"error": err.Error()})
+		return
+	}
+
+	w.WriteHeader(http.StatusOK)
+	if err := json.NewEncoder(w).Encode(map[string]any{"result": result}); err != nil {
+		s.logger.Error("Failed to encode execute response", err)
 	}
 }
 
