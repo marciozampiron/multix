@@ -196,6 +196,18 @@ Real, validated auth commands:
 - `security.identity-posture`
 - `cost.quick-scan`
 
+### v0.8-alpha — AI-Assisted Provisioning & Scaffolding
+- `infra.generate_network` (VPC/VCN via AI Tooling)
+- `diagram.generate`
+
+### v0.9-alpha — FinOps Unified Billing (FOCUS)
+- `cost.focus_report` (Multi-cloud billing aggregation)
+- `cost.pricing_query` (Real-time public cloud pricing lookup)
+
+### v0.10-alpha — AI-Assisted Security Remediation
+- `security.k8s_audit` (CVE Scanner & AI Remediation)
+- `security.iam_audit` (Multi-cloud IAM least-privilege analysis & AI Remediation)
+
 ### v1.0.0-beta — Enterprise Hardening
 - Stable provider contracts
 - Stable skill contracts
