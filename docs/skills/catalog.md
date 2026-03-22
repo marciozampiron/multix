@@ -10,6 +10,11 @@
 - `k8s.list_clusters`
 - `ai.explain`
 - `ai.generate_terraform`
+- `infra.generate_network`
+- `diagram.generate`
+- `cost.focus_report`
+- `security.k8s_audit`
+- `security.iam_audit`
 
 ---
 
