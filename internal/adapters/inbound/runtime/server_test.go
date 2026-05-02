@@ -20,16 +20,20 @@ import (
 	"multix/internal/platform/logger"
 )
 
-type mockSkill struct {}
-func (m *mockSkill) Name() string { return "test.skill" }
+type mockSkill struct{}
+
+func (m *mockSkill) Name() string        { return "test.skill" }
 func (m *mockSkill) Description() string { return "Mock skill" }
-func (m *mockSkill) InputSchema() any { return nil }
+func (m *mockSkill) InputSchema() any    { return nil }
 func (m *mockSkill) Execute(ctx context.Context, input map[string]any) (any, error) {
 	provider, _ := input["provider"].(string)
+	requestID, _ := input["request_id"].(string)
 	return map[string]string{
-		"msg": "hello from mock", 
-		"echo_key": input["key"].(string),
-		"echo_provider": provider,
+		"msg":                "hello from mock",
+		"echo_key":           input["key"].(string),
+		"echo_provider":      provider,
+		"echo_request_id":    requestID,
+		"context_request_id": RequestIDFromContext(ctx),
 	}, nil
 }
 
@@ -67,6 +71,9 @@ func TestHealthHandler(t *testing.T) {
 	if mode, ok := response["mode"]; !ok || mode != "runtime" {
 		t.Errorf("handler returned unexpected mode: got %v", rr.Body.String())
 	}
+	if requestID := rr.Header().Get(RequestIDHeader); requestID == "" {
+		t.Fatal("expected generated request ID response header")
+	}
 }
 
 func TestHealthHandler_WrongMethod(t *testing.T) {
@@ -88,7 +95,7 @@ func TestHealthHandler_WrongMethod(t *testing.T) {
 
 func TestToolsHandler(t *testing.T) {
 	log := logger.New("error")
-	
+
 	// Create a dummy ToolAdapter with no skills, which should just return an empty JS array []
 	adapter := agent.NewToolAdapter(nil, nil)
 	s := NewServer(log, adapter, 8080)
@@ -124,7 +131,7 @@ func TestToolsHandler(t *testing.T) {
 
 func TestExecuteHandler_Success(t *testing.T) {
 	log := logger.New("error")
-	
+
 	// Create a real registry and executor, and prep it with a mock skill
 	registry := domainSkills.NewRegistry()
 	registry.Register(&mockSkill{})
@@ -150,7 +157,7 @@ func TestExecuteHandler_Success(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("failed to parse success response: %v", err)
 	}
-	
+
 	if !resp.Ok || resp.Skill != "test.skill" || resp.Provider != "aws" {
 		t.Errorf("unexpected success envelope: %+v", resp)
 	}
@@ -158,6 +165,49 @@ func TestExecuteHandler_Success(t *testing.T) {
 	resultMap, ok := resp.Result.(map[string]any)
 	if !ok || resultMap["echo_provider"] != "aws" {
 		t.Errorf("expected provider to be injected into params, got: %+v", resp.Result)
+	}
+	if rr.Header().Get(RequestIDHeader) == "" {
+		t.Fatal("expected generated request ID response header")
+	}
+}
+
+func TestExecuteHandler_PropagatesRequestID(t *testing.T) {
+	log := logger.New("error")
+
+	registry := domainSkills.NewRegistry()
+	registry.Register(&mockSkill{})
+	executor := appSkills.NewExecutor(registry)
+	adapter := agent.NewToolAdapter(registry, executor)
+
+	s := NewServer(log, adapter, 8080)
+
+	req, err := http.NewRequest(http.MethodPost, "/execute", strings.NewReader(`{"skill": "test.skill", "provider": "aws", "params": {"key": "value"}}`))
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+	req.Header.Set(RequestIDHeader, "req-test-123")
+
+	rr := httptest.NewRecorder()
+	s.mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d. Body: %s", rr.Code, rr.Body.String())
+	}
+	if rr.Header().Get(RequestIDHeader) != "req-test-123" {
+		t.Fatalf("expected request ID response header to be propagated, got %q", rr.Header().Get(RequestIDHeader))
+	}
+
+	var resp executeSuccessResponse
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("failed to parse success response: %v", err)
+	}
+
+	resultMap, ok := resp.Result.(map[string]any)
+	if !ok {
+		t.Fatalf("expected map result, got %+v", resp.Result)
+	}
+	if resultMap["echo_request_id"] != "req-test-123" || resultMap["context_request_id"] != "req-test-123" {
+		t.Fatalf("expected request ID in params and context, got %+v", resultMap)
 	}
 }
 
@@ -211,7 +261,7 @@ func TestExecuteHandler_UnknownSkill(t *testing.T) {
 	rr := httptest.NewRecorder()
 	s.mux.ServeHTTP(rr, req)
 
-	// The executeHandler string matches on "not found" mapped to 404. 
+	// The executeHandler string matches on "not found" mapped to 404.
 	if rr.Code != http.StatusNotFound {
 		t.Errorf("expected 404 for missing real skill resolution, got %d", rr.Code)
 	}
@@ -222,4 +272,3 @@ func TestExecuteHandler_UnknownSkill(t *testing.T) {
 		t.Errorf("expected Ok=false")
 	}
 }
-

@@ -19,7 +19,14 @@ import (
 
 	"multix/internal/adapters/inbound/agent"
 	"multix/internal/platform/logger"
+
+	"github.com/google/uuid"
 )
+
+// RequestIDHeader is the HTTP header used to propagate runtime request IDs.
+const RequestIDHeader = "X-Request-ID"
+
+type requestIDContextKey struct{}
 
 // Server represents the local MULTIX HTTP runtime.
 type Server struct {
@@ -43,10 +50,10 @@ func NewServer(logger logger.Logger, adapter *agent.ToolAdapter, port int) *Serv
 
 // registerRoutes wires up all HTTP endpoints.
 func (s *Server) registerRoutes() {
-	s.mux.HandleFunc("GET /health", s.healthHandler)
-	s.mux.HandleFunc("GET /tools", s.toolsHandler)
-	s.mux.HandleFunc("POST /execute", s.executeHandler)
-	s.mux.HandleFunc("GET /capabilities", s.capabilitiesHandler)
+	s.mux.HandleFunc("GET /health", s.withRequestContext(s.healthHandler))
+	s.mux.HandleFunc("GET /tools", s.withRequestContext(s.toolsHandler))
+	s.mux.HandleFunc("POST /execute", s.withRequestContext(s.executeHandler))
+	s.mux.HandleFunc("GET /capabilities", s.withRequestContext(s.capabilitiesHandler))
 }
 
 // healthHandler provides a basic liveness probe.
@@ -99,10 +106,10 @@ type executeRequest struct {
 
 // executeSuccessResponse defines the canonical success payload.
 type executeSuccessResponse struct {
-	Ok       bool           `json:"ok"`
-	Skill    string         `json:"skill"`
-	Provider string         `json:"provider,omitempty"`
-	Result   any            `json:"result"`
+	Ok       bool   `json:"ok"`
+	Skill    string `json:"skill"`
+	Provider string `json:"provider,omitempty"`
+	Result   any    `json:"result"`
 }
 
 // executeErrorResponse defines the canonical error payload.
@@ -134,6 +141,12 @@ func (s *Server) executeHandler(w http.ResponseWriter, r *http.Request) {
 		req.Params = map[string]any{}
 	}
 
+	if requestID := RequestIDFromContext(r.Context()); requestID != "" {
+		if _, ok := req.Params["request_id"]; !ok {
+			req.Params["request_id"] = requestID
+		}
+	}
+
 	if req.Provider != "" {
 		if _, ok := req.Params["provider"]; !ok {
 			req.Params["provider"] = req.Provider
@@ -142,17 +155,17 @@ func (s *Server) executeHandler(w http.ResponseWriter, r *http.Request) {
 
 	// We still use s.agent.Execute under the hood because ToolAdapter abstractly executes from the registry
 	result, err := s.agent.Execute(r.Context(), req.Skill, req.Params)
-	
+
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
-		s.logger.Error("Failed to execute tool", err, "skill", req.Skill)
-		
+		s.logger.Error("Failed to execute tool", err, "skill", req.Skill, "request_id", RequestIDFromContext(r.Context()))
+
 		if strings.Contains(strings.ToLower(err.Error()), "not found") {
 			w.WriteHeader(http.StatusNotFound)
 		} else {
 			w.WriteHeader(http.StatusInternalServerError)
 		}
-		
+
 		json.NewEncoder(w).Encode(executeErrorResponse{Ok: false, Error: err.Error()})
 		return
 	}
@@ -167,6 +180,52 @@ func (s *Server) executeHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		s.logger.Error("Failed to encode execute response", err)
 	}
+}
+
+// RequestIDFromContext returns the runtime request ID attached to ctx, if present.
+func RequestIDFromContext(ctx context.Context) string {
+	requestID, _ := ctx.Value(requestIDContextKey{}).(string)
+	return requestID
+}
+
+func (s *Server) withRequestContext(next http.HandlerFunc) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		requestID := strings.TrimSpace(r.Header.Get(RequestIDHeader))
+		if requestID == "" {
+			requestID = uuid.NewString()
+		}
+
+		w.Header().Set(RequestIDHeader, requestID)
+		ctx := context.WithValue(r.Context(), requestIDContextKey{}, requestID)
+		req := r.WithContext(ctx)
+		recorder := &statusRecorder{ResponseWriter: w, statusCode: http.StatusOK}
+		started := time.Now()
+
+		requestLogger := s.logger.With(
+			"request_id", requestID,
+			"method", r.Method,
+			"path", r.URL.Path,
+		)
+		requestLogger.Info("Runtime request started")
+
+		next(recorder, req)
+
+		requestLogger.Info(
+			"Runtime request completed",
+			"status", recorder.statusCode,
+			"duration_ms", time.Since(started).Milliseconds(),
+		)
+	}
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (r *statusRecorder) WriteHeader(statusCode int) {
+	r.statusCode = statusCode
+	r.ResponseWriter.WriteHeader(statusCode)
 }
 
 // Run starts the HTTP server and blocks until graceful shutdown or failure.
