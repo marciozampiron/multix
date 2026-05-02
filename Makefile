@@ -5,8 +5,9 @@ VERSION?=1.0.0-beta
 BUILD_DIR:=build
 GO:=go
 GOFLAGS:=-ldflags "-s -w -X multix/pkg/version.Version=$(VERSION)"
+CROSS_PLATFORMS:=linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
 
-.PHONY: all build run test test-race smoke-oci lint fmt vet vuln tidy clean install help
+.PHONY: all build build-cross run test test-race smoke-oci lint fmt vet vuln tidy clean install help
 .PHONY: ai-help ai-plan ai-implement ai-review ai-safe-fix ai-prompts ai-comments ai-review-comments
 
 all: clean fmt vet tidy test build
@@ -16,6 +17,18 @@ build: ## Build the Enterprise CLI binary
 	@mkdir -p $(BUILD_DIR)
 	@$(GO) build $(GOFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) ./cmd/multix/main.go
 	@echo "==> Build complete: $(BUILD_DIR)/$(BINARY_NAME)"
+
+build-cross: ## Cross-compile release binaries for linux/darwin amd64/arm64
+	@echo "==> Cross-compiling $(BINARY_NAME) $(VERSION)..."
+	@mkdir -p $(BUILD_DIR)
+	@for platform in $(CROSS_PLATFORMS); do \
+		GOOS=$${platform%/*}; \
+		GOARCH=$${platform#*/}; \
+		output="$(BUILD_DIR)/$(BINARY_NAME)-$${GOOS}-$${GOARCH}"; \
+		echo "==> Building $${output}"; \
+		CGO_ENABLED=0 GOOS=$${GOOS} GOARCH=$${GOARCH} $(GO) build $(GOFLAGS) -o "$${output}" ./cmd/multix/main.go; \
+	done
+	@echo "==> Cross-compilation complete: $(BUILD_DIR)/"
 
 run: build ## Build and run the CLI (usage: make run ARGS="cloud list")
 	@$(BUILD_DIR)/$(BINARY_NAME) $(ARGS)
