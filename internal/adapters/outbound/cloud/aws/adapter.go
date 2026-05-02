@@ -21,6 +21,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/ec2"
 	ec2types "github.com/aws/aws-sdk-go-v2/service/ec2/types"
+	"github.com/aws/aws-sdk-go-v2/service/eks"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
@@ -34,6 +35,8 @@ type adapter struct {
 	ec2ClientFunc func(ctx context.Context) (ec2API, string, error)
 	// s3ClientFunc allows testable seams for S3 listing.
 	s3ClientFunc func(ctx context.Context) (s3API, error)
+	// eksClusterListFunc lists EKS clusters in the active region.
+	eksClusterListFunc func(ctx context.Context) ([]*k8s.Cluster, error)
 }
 
 type stsAPI interface {
@@ -54,7 +57,7 @@ func NewAdapter(log logger.Logger) interface {
 	outbound.InventoryProvider
 	outbound.K8sProvider
 } {
-	return &adapter{
+	a := &adapter{
 		logger: log.With("provider", "aws"),
 		stsClientFunc: func(ctx context.Context) (stsAPI, error) {
 			cfg, err := config.LoadDefaultConfig(ctx)
@@ -78,6 +81,48 @@ func NewAdapter(log logger.Logger) interface {
 			return s3.NewFromConfig(cfg), nil
 		},
 	}
+	a.eksClusterListFunc = a.defaultEKSList
+	return a
+}
+
+func (a *adapter) defaultEKSList(ctx context.Context) ([]*k8s.Cluster, error) {
+	cfg, err := config.LoadDefaultConfig(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load AWS config: %w", err)
+	}
+	client := eks.NewFromConfig(cfg)
+	region := cfg.Region
+
+	var clusters []*k8s.Cluster
+	var nextToken *string
+	for {
+		out, err := client.ListClusters(ctx, &eks.ListClustersInput{NextToken: nextToken})
+		if err != nil {
+			return nil, fmt.Errorf("EKS ListClusters failed: %w", err)
+		}
+		for _, name := range out.Clusters {
+			descOut, err := client.DescribeCluster(ctx, &eks.DescribeClusterInput{Name: &name})
+			if err != nil {
+				return nil, fmt.Errorf("EKS DescribeCluster %q failed: %w", name, err)
+			}
+			c := descOut.Cluster
+			cluster := &k8s.Cluster{
+				ID:     awsString(c.Arn),
+				Name:   awsString(c.Name),
+				Region: region,
+				Status: string(c.Status),
+			}
+			if c.Version != nil {
+				cluster.Version = *c.Version
+			}
+			clusters = append(clusters, cluster)
+		}
+		if out.NextToken == nil || *out.NextToken == "" {
+			break
+		}
+		nextToken = out.NextToken
+	}
+	return clusters, nil
 }
 
 func (a *adapter) ID() string {
@@ -314,12 +359,10 @@ func mapS3Bucket(b s3types.Bucket, accountID string) *inventory.Resource {
 	return r
 }
 
-// ListClusters returns EKS clusters.
+// ListClusters returns EKS clusters in the active region.
 func (a *adapter) ListClusters(ctx context.Context) ([]*k8s.Cluster, error) {
-	a.logger.Info("Listing EKS clusters", "region", "us-east-1")
-	return []*k8s.Cluster{
-		{ID: "c-1", Name: "prod-eks-cluster", Region: "us-east-1", Status: "ACTIVE", Version: "1.30", NodeCount: 12},
-	}, nil
+	a.logger.Info("Listing EKS clusters")
+	return a.eksClusterListFunc(ctx)
 }
 
 // SyncContext syncs EKS context to kubeconfig.
