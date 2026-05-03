@@ -20,9 +20,9 @@ Three packages form the entire stable extension surface:
 
 > Note on `internal/`: today these packages live under `internal/` because
 > the project hasn't carved out a public Go module path yet. Once that
-> happens (planned for the v1.0 release alongside #20 plugins), they will
-> migrate to a stable import path. The contract semantics are already
-> v1.0; only the import path is in flux.
+> happens, they will migrate to a stable import path. The contract semantics
+> are already v1.0; only the import path is in flux. Plugin implementation is
+> tracked separately under issue #20 and ADR 0008.
 
 ## Semver promise (v1.0+)
 

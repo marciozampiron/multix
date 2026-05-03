@@ -1,6 +1,6 @@
-# MULTIX Runtime Architecture (v0.4-alpha)
+# MULTIX Runtime Architecture
 
-This is the authoritative architecture document for the local HTTP runtime adapter introduced in v0.4. The runtime exposes an agent-facing execution surface while keeping the CLI entrypoint extremely thin. It is an intentional adapter-based design kept maximally minimal for the v0.4 milestone.
+This is the authoritative architecture document for the local HTTP runtime adapter. The runtime exposes an agent-facing execution surface while keeping the CLI entrypoint thin. It is an adapter-based design built around the same skill registry used by CLI commands and generated tool manifests.
 
 ## Why this exists
 
@@ -23,6 +23,7 @@ CLI (cobra)
         -> /tools
         -> /execute
         -> /capabilities
+        -> /metrics
           -> ToolAdapter
             -> skill registry / executor
               -> provider-aware skill implementations
@@ -39,7 +40,7 @@ CLI (cobra)
 - **Graceful shutdown**: Correct signal interception prevents orphaned processes.
 - **JSON-first machine interface**: Clean serialization optimized for machine intelligibility.
 - **Local-first execution model**: Meant for local sandboxing and safe terminal contexts.
-- **Intentional Simplicity**: v0.4 intentionally avoids auth middleware, persistence, distributed runtime concerns, or plugin overengineering.
+- **Intentional Simplicity**: the runtime intentionally avoids auth middleware, persistence, distributed runtime concerns, or plugin overengineering.
 
 ## Current runtime endpoints
 
@@ -137,6 +138,14 @@ Returns the runtime capability matrix mapping enabled features and declared runt
 ```
 - **Status Codes:** `200 OK`
 
+### GET /metrics
+Returns Prometheus text exposition metrics for runtime requests.
+- **Method:** `GET`
+- **Path:** `/metrics`
+- **Purpose:** Gives local operators and CI smoke tests a scrapeable metrics surface without requiring a heavy metrics dependency.
+- **Response Shape:** Prometheus text format.
+- **Status Codes:** `200 OK`
+
 ## Runtime lifecycle
 
 To boot the engine: `multix serve --port 8080`.
@@ -144,11 +153,11 @@ The server starts logging and binds to the specified port.
 
 A critical element of the architecture is its *Graceful Shutdown* handling. Upon receiving `os.Interrupt` or `SIGTERM`, the runtime enforces a strict 5-second shutdown timeout context before forcefully terminating. This ensures that in-flight skill executions wrap up safely, which is imperative for CI workflows, containerization limits (like Docker's `STOPSIGNAL`), and future service wrappers.
 
-## Testing strategy (v0.4)
+## Testing strategy
 
 The current testing regime rigorously dictates:
 - **Unit tests for runtime handlers:** Verifying parsing and serialization of `executeRequest` and envelopes inside `server_test.go`.
-- **Endpoint coverage:** Mocks and tests assert coverage for `/health`, `/tools`, and `/execute`.
+- **Endpoint coverage:** Mocks and tests assert coverage for `/health`, `/tools`, `/metrics`, and `/execute`.
 - **404 Mapping & Provider Injection:** The exact behavior of routing unknown skills to `404` and enforcing `params["provider"]` logic is unit-tested sequentially.
 - **OCI Smoke Script for auth flows:** End-to-end execution of the binary locally via `scripts/e2e/oci_smoke.sh` hooked up by `make smoke-oci`. These smoke tests are *intentionally strict*, validating graceful failure when `~/.oci/config` is absent and demanding absolute lack of `panic` logs from Go core. They are specifically not full-blown cloud integration suites, but bulletproof deployment readiness guards.
 
@@ -158,16 +167,15 @@ The following are strictly out of scope for the current design:
 - No auth middleware or token checks on runtime endpoints.
 - No TLS termination in-process (must be handled by a proxy if exposed).
 - No OpenAPI (Swagger) spec generation for the runtime yet.
-- No request tracing / telemetry middleware yet.
-- No Prometheus metrics endpoint yet (planned later).
+- No distributed tracing middleware yet; request IDs are propagated locally.
 - No remote daemon deployment contract yet (assumes `localhost` binding).
 - No streaming execution protocol yet (WebSocket/SSE).
-- No plugin sandboxing yet (WASM/shared object isolation).
+- No plugin sandboxing yet. ADR 0008 proposes federated HTTP/MCP servers instead of native Go plugins.
 
 ## Forward path
 
-The runtime paves the exact groundwork required for broader integrations:
-- **v0.5**: Broad inventory expansion parsing EC2/S3, GCP Compute, and OCI Object Storage payloads back through the Execute path.
-- **v0.6**: Observability enhancements tracking capability invocations.
-- **v0.7**: Higher-level doctor skills (`doctor.auth`).
-- **v1.0**: Absolute contract stabilization and public plugin extension models.
+The runtime paves the groundwork required for broader integrations:
+- MCP server surface for local skills.
+- MCP client/plugin loader for external federated tools.
+- Stronger operational hardening for auth around non-local deployments.
+- Optional distributed tracing when request IDs are no longer enough.

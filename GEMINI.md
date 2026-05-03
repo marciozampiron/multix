@@ -24,7 +24,7 @@ This repository must remain:
 Multix is not just a CLI.
 It is a **platform of reusable capabilities ("skills")** that can be consumed by:
 - CLI commands
-- future API endpoints
+- local HTTP runtime endpoints
 - future AI agents / tool-calling
 - future MCP-compatible adapters
 
@@ -161,13 +161,21 @@ Naming convention:
 
 Examples:
 - `doctor.run`
+- `doctor.auth`
+- `doctor.k8s`
 - `auth.validate`
 - `auth.whoami`
 - `inventory.scan`
 - `inventory.summary`
 - `k8s.list_clusters`
 - `ai.explain`
-- `ai.generate_terraform`
+- `cost.quick_scan`
+- `cost.focus_report`
+- `infra.generate_network`
+- `landingzone.audit`
+- `security.identity_posture`
+- `security.k8s_audit`
+- `security.iam_audit`
 
 ---
 
@@ -197,6 +205,7 @@ When asked to improve comments or documentation in the repository:
 - do not rename packages or symbols
 - do not move files
 - do not introduce new abstractions
+- keep README, `docs/README.md`, `docs/skills/catalog.md`, and `docs/testing-playbook.md` consistent when public behavior changes
 
 Documentation-only changes may include:
 - file headers in important Go files

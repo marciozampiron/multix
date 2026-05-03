@@ -1,40 +1,60 @@
-# MULTIX Roadmap Structure
+# MULTIX Product Roadmap
 
-## 1. Project Name Options
-- [Your project name options here]
+This roadmap mirrors the GitHub Project `MULTIX Product Roadmap` and the repository state after the v1.0 beta hardening work.
 
-## 2. Description
-- [A short description of the project]
+## Product Direction
 
-## 3. Project Type/Layout
-- [Details about the type/layout of the project]
+MULTIX is a skills-first multi-cloud runtime:
 
-## 4. Custom Fields
-- [List any custom fields]
+- CLI for humans.
+- Local HTTP runtime for agents and automation.
+- Stable skill and provider contracts.
+- Future MCP-based plugin federation.
 
-## 5. Views
-- [Outline the views of the project]
+## Delivered
 
-## 6. Labels
-- [Include labels used in the project]
+- v0.1 foundation: Go module, Cobra, Makefile, repository standards.
+- v0.2 skills-first runtime: skill contract, registry, executor, agent tool manifests.
+- v0.3 real auth: AWS and GCP validation/whoami paths.
+- v0.4 runtime: `multix serve`, `/health`, `/tools`, `/execute`, `/capabilities`.
+- v0.5 inventory: AWS/GCP/OCI inventory paths.
+- v0.6 Kubernetes: EKS/GKE/OKE list-cluster paths.
+- v0.7 operational skills: doctor, landing zone, identity posture, cost quick scan.
+- v0.8/v0.10 AI-assisted skills: network generation, Kubernetes audit, IAM audit.
+- v0.9 FinOps: FOCUS-aligned `cost.focus_report` for AWS, GCP, and OCI.
+- v1.0 stabilization: public contracts, ADRs, governance docs, CI hardening.
 
-## 7. Milestones
-- [Define milestones for the project]
+## Open
 
-## 8. Epics
-- [List epics that are considered in the roadmap]
+- #20 Plugin story and extension model implementation.
+- #21 Enterprise Skill Catalog decision remains intentionally deferred unless reopened by the maintainer.
 
-## 9. Initial Issues
-- [Describe the initial issues that will be tackled]
+## Governance Rules
 
-## 10. Done/In-Progress/Next/Later Population
-- [Summarize how each status will be populated]
+- Every non-trivial change ships through a branch and PR.
+- PR bodies should include summary, decisions, validation, and linked issue.
+- Use `Closes #N` only when the issue is fully delivered.
+- Use `Refs #N` or `Part of #N` for design-only or partial work.
+- Do not mark Project items `Done` until the closing PR is merged.
+- Keep ADRs historical; add a new ADR for a new architecture decision instead of rewriting an accepted one.
 
-## 11. Governance Rules
-- [Outline the rules for governance in the project]
+## Validation Gate
 
-## 12. Weekly Operating Ritual
-- [Describe the weekly operating ritual]
+Minimum local gate before PR:
 
-## 13. Stretch Vision
-- [Discuss the stretch vision for the project]
+```bash
+go test ./...
+go vet ./...
+make all
+make build-cross
+git diff --check
+```
+
+Use `make test-race` for shared runtime, registry, adapter, or concurrency-sensitive changes.
+
+## Stretch Vision
+
+- MCP server exposing the local skill registry.
+- MCP client/plugin loader for external tool servers.
+- Namespaced remote tools with manifest validation.
+- Provider-aware golden paths for enterprise operations.
