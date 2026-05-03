@@ -132,11 +132,11 @@ func TestGCPAdapter_List_ComputeError(t *testing.T) {
 
 func TestGCPAdapter_RegionFromZone(t *testing.T) {
 	cases := map[string]string{
-		"us-central1-a": "us-central1",
+		"us-central1-a":  "us-central1",
 		"europe-west4-b": "europe-west4",
-		"asia-east1-c":  "asia-east1",
-		"us-central1":   "us-central1", // not zone-shaped → unchanged
-		"":              "",
+		"asia-east1-c":   "asia-east1",
+		"us-central1":    "us-central1", // not zone-shaped → unchanged
+		"":               "",
 	}
 	for input, want := range cases {
 		if got := regionFromZone(input); got != want {

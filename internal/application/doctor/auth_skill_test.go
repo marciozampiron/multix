@@ -28,10 +28,10 @@ func (f *fakeAuthProvider) Validate(ctx context.Context) (*auth.ValidationResult
 }
 
 type fakeRegistry struct {
-	auth     map[string]*fakeAuthProvider
-	authErr  map[string]error
-	k8s      map[string]outbound.K8sProvider
-	k8sErr   map[string]error
+	auth    map[string]*fakeAuthProvider
+	authErr map[string]error
+	k8s     map[string]outbound.K8sProvider
+	k8sErr  map[string]error
 }
 
 func (f *fakeRegistry) GetCloudAuthProvider(name string) (outbound.AuthProvider, error) {

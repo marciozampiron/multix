@@ -26,7 +26,7 @@ func NewServeCmd(logger logger.Logger, adapter *agent.ToolAdapter) *cobra.Comman
 			return server.Run(cmd.Context())
 		},
 	}
-	
+
 	cmd.Flags().IntVar(&port, "port", 8080, "Port to assign to the HTTP runtime server")
 	return cmd
 }

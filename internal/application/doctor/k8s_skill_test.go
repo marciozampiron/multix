@@ -60,10 +60,10 @@ func TestK8sHealthSkill_ProviderError(t *testing.T) {
 
 func TestIsHealthyClusterStatus(t *testing.T) {
 	cases := map[string]bool{
-		"ACTIVE":  true,
-		"RUNNING": true,
-		"running": true,
-		" Active": true,
+		"ACTIVE":   true,
+		"RUNNING":  true,
+		"running":  true,
+		" Active":  true,
 		"CREATING": false,
 		"DELETING": false,
 		"":         false,

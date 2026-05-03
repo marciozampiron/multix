@@ -16,7 +16,7 @@ type fakeAuth struct {
 	err    error
 }
 
-func (f *fakeAuth) ID() string                                                 { return "" }
+func (f *fakeAuth) ID() string { return "" }
 func (f *fakeAuth) Login(ctx context.Context, c auth.Credentials) (*auth.Session, error) {
 	return nil, nil
 }
