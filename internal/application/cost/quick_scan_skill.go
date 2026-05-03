@@ -63,9 +63,9 @@ func (s *QuickScanSkill) Execute(ctx context.Context, input map[string]any) (any
 		report = append(report, entry)
 	}
 	return map[string]any{
-		"note":             "resource-count proxy; not a billing query (see #46 for cost.focus_report)",
-		"grand_total":      grandTotal,
-		"providers":        report,
+		"note":        "resource-count proxy; not a billing query (see #46 for cost.focus_report)",
+		"grand_total": grandTotal,
+		"providers":   report,
 	}, nil
 }
 
