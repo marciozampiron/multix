@@ -24,6 +24,7 @@ import (
 	"cloud.google.com/go/storage"
 	"golang.org/x/oauth2/google"
 	compute "google.golang.org/api/compute/v1"
+	container "google.golang.org/api/container/v1"
 	"google.golang.org/api/iterator"
 	"google.golang.org/api/option"
 )
@@ -57,6 +58,8 @@ type Adapter struct {
 	computeListFunc func(ctx context.Context, projectID string) ([]gcpInstance, error)
 	// storageListFunc lists Cloud Storage buckets for a project.
 	storageListFunc func(ctx context.Context, projectID string) ([]gcpBucket, error)
+	// gkeClusterListFunc lists GKE clusters across all locations for a project.
+	gkeClusterListFunc func(ctx context.Context, projectID string) ([]*k8s.Cluster, error)
 }
 
 // NewAdapter creates a new GCP cloud adapter.
@@ -70,7 +73,36 @@ func NewAdapter(log logger.Logger) *Adapter {
 	}
 	a.computeListFunc = a.defaultComputeList
 	a.storageListFunc = a.defaultStorageList
+	a.gkeClusterListFunc = a.defaultGKEList
 	return a
+}
+
+func (a *Adapter) defaultGKEList(ctx context.Context, projectID string) ([]*k8s.Cluster, error) {
+	creds, err := a.defaultCredentials(ctx)
+	if err != nil {
+		return nil, err
+	}
+	svc, err := container.NewService(ctx, option.WithCredentials(creds))
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize GKE service: %w", err)
+	}
+	parent := fmt.Sprintf("projects/%s/locations/-", projectID)
+	resp, err := svc.Projects.Locations.Clusters.List(parent).Context(ctx).Do()
+	if err != nil {
+		return nil, fmt.Errorf("GKE Clusters.List failed: %w", err)
+	}
+	clusters := make([]*k8s.Cluster, 0, len(resp.Clusters))
+	for _, c := range resp.Clusters {
+		clusters = append(clusters, &k8s.Cluster{
+			ID:        c.Id,
+			Name:      c.Name,
+			Region:    c.Location,
+			Status:    c.Status,
+			Version:   c.CurrentMasterVersion,
+			NodeCount: int(c.CurrentNodeCount),
+		})
+	}
+	return clusters, nil
 }
 
 func (a *Adapter) defaultComputeList(ctx context.Context, projectID string) ([]gcpInstance, error) {
@@ -411,13 +443,14 @@ func regionFromZone(zone string) string {
 	return zone
 }
 
-// ListClusters returns GKE clusters.
+// ListClusters returns GKE clusters across all locations for the active project.
 func (a *Adapter) ListClusters(ctx context.Context) ([]*k8s.Cluster, error) {
-	a.log.Info("Listing GKE clusters", "region", "us-central1")
-	return []*k8s.Cluster{
-		{ID: "c-111", Name: "gke-autopilot-prod", Region: "us-central1", Version: "1.29", NodeCount: 0, Status: "RUNNING"},
-		{ID: "c-222", Name: "gke-standard-dev", Region: "us-east4", Version: "1.28", NodeCount: 5, Status: "RUNNING"},
-	}, nil
+	a.log.Info("Listing GKE clusters")
+	projectID, err := a.resolveProjectID(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return a.gkeClusterListFunc(ctx, projectID)
 }
 
 // SyncContext syncs GKE context to kubeconfig.

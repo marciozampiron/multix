@@ -20,6 +20,7 @@ import (
 	"multix/internal/ports/outbound"
 
 	"github.com/oracle/oci-go-sdk/v65/common"
+	"github.com/oracle/oci-go-sdk/v65/containerengine"
 	"github.com/oracle/oci-go-sdk/v65/core"
 	"github.com/oracle/oci-go-sdk/v65/identity"
 	"github.com/oracle/oci-go-sdk/v65/objectstorage"
@@ -53,6 +54,8 @@ type adapter struct {
 	computeListFunc func(ctx context.Context, cfg common.ConfigurationProvider, compartmentID string) ([]ociInstance, error)
 	// bucketListFunc lists Object Storage buckets under a compartment.
 	bucketListFunc func(ctx context.Context, cfg common.ConfigurationProvider, compartmentID string) ([]ociBucket, error)
+	// okeClusterListFunc lists OKE clusters under a compartment.
+	okeClusterListFunc func(ctx context.Context, cfg common.ConfigurationProvider, compartmentID string) ([]*k8s.Cluster, error)
 }
 
 // identityAPI defines the interface we need from OCI's identity client to make testing easier.
@@ -81,7 +84,40 @@ func NewAdapter(log logger.Logger) interface {
 	}
 	a.computeListFunc = defaultComputeList
 	a.bucketListFunc = defaultBucketList
+	a.okeClusterListFunc = defaultOKEList
 	return a
+}
+
+func defaultOKEList(ctx context.Context, cfg common.ConfigurationProvider, compartmentID string) ([]*k8s.Cluster, error) {
+	client, err := containerengine.NewContainerEngineClientWithConfigurationProvider(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize OKE client: %w", err)
+	}
+	region, _ := cfg.Region()
+
+	var out []*k8s.Cluster
+	var page *string
+	for {
+		req := containerengine.ListClustersRequest{CompartmentId: common.String(compartmentID), Page: page}
+		resp, err := client.ListClusters(ctx, req)
+		if err != nil {
+			return nil, fmt.Errorf("OKE ListClusters failed: %w", err)
+		}
+		for _, c := range resp.Items {
+			out = append(out, &k8s.Cluster{
+				ID:      stringValue(c.Id),
+				Name:    stringValue(c.Name),
+				Region:  region,
+				Status:  string(c.LifecycleState),
+				Version: stringValue(c.KubernetesVersion),
+			})
+		}
+		if resp.OpcNextPage == nil || *resp.OpcNextPage == "" {
+			break
+		}
+		page = resp.OpcNextPage
+	}
+	return out, nil
 }
 
 func defaultComputeList(ctx context.Context, cfg common.ConfigurationProvider, compartmentID string) ([]ociInstance, error) {
@@ -367,12 +403,15 @@ func (a *adapter) listBuckets(ctx context.Context, cfg common.ConfigurationProvi
 	return resources, nil
 }
 
-// ListClusters returns OKE clusters (stub).
+// ListClusters returns OKE clusters under the active tenancy compartment.
 func (a *adapter) ListClusters(ctx context.Context) ([]*k8s.Cluster, error) {
-	a.logger.Info("Listing OKE clusters", "region", "us-ashburn-1")
-	return []*k8s.Cluster{
-		{ID: "ocid1.cluster.oc1..abc", Name: "prod-oke-cluster", Region: "us-ashburn-1", Status: "ACTIVE", Version: "v1.30.1", NodeCount: 6},
-	}, nil
+	a.logger.Info("Listing OKE clusters")
+	cfg := a.cfgProviderFunc()
+	tenancyID, err := cfg.TenancyOCID()
+	if err != nil {
+		return nil, fmt.Errorf("invalid OCI configuration (missing tenancy): %w", err)
+	}
+	return a.okeClusterListFunc(ctx, cfg, tenancyID)
 }
 
 // SyncContext syncs OKE context to kubeconfig (stub).
