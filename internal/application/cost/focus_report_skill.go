@@ -25,6 +25,8 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/costexplorer"
 	cetypes "github.com/aws/aws-sdk-go-v2/service/costexplorer/types"
+	"github.com/oracle/oci-go-sdk/v65/common"
+	"github.com/oracle/oci-go-sdk/v65/usageapi"
 	"google.golang.org/api/iterator"
 )
 
@@ -37,8 +39,8 @@ const (
 // FocusReportSkill is the v1 implementation of cost.focus_report:
 //
 //   - AWS: real Cost Explorer GetCostAndUsage call grouped by SERVICE + REGION.
-//   - GCP / OCI: structured `supported: false` envelope pointing at the
-//     follow-up issues that will wire their billing APIs.
+//   - GCP: real Cloud Billing BigQuery export query grouped by service + region.
+//   - OCI: real Usage API query grouped by service + region.
 //
 // The skill is intentionally explicit about the partial coverage so the
 // agent doesn't conflate "no spend" with "not yet implemented".
@@ -48,6 +50,8 @@ type FocusReportSkill struct {
 	awsCostFetchFunc func(ctx context.Context, period string) ([]cost.FocusBillingRow, error)
 	// gcpBillingFetchFunc is a testable seam for the BigQuery billing export call.
 	gcpBillingFetchFunc func(ctx context.Context, period string) ([]cost.FocusBillingRow, error)
+	// ociUsageFetchFunc is a testable seam for the OCI Usage API call.
+	ociUsageFetchFunc func(ctx context.Context, tenancyOCID, period string) ([]cost.FocusBillingRow, error)
 }
 
 // NewFocusReportSkill creates the skill wired with the default AWS Cost
@@ -56,13 +60,14 @@ func NewFocusReportSkill(pr outbound.ProviderRegistry) skills.Skill {
 	s := &FocusReportSkill{providers: pr}
 	s.awsCostFetchFunc = s.defaultAWSCostFetch
 	s.gcpBillingFetchFunc = s.defaultGCPBillingFetch
+	s.ociUsageFetchFunc = s.defaultOCIUsageFetch
 	return s
 }
 
 func (s *FocusReportSkill) Name() string { return "cost.focus_report" }
 
 func (s *FocusReportSkill) Description() string {
-	return "Generates a FOCUS-aligned billing report. AWS uses Cost Explorer, GCP uses Cloud Billing BigQuery export, and OCI returns a structured pending-integration envelope."
+	return "Generates a FOCUS-aligned billing report using AWS Cost Explorer, GCP Cloud Billing BigQuery export, and OCI Usage API."
 }
 
 func (s *FocusReportSkill) InputSchema() any {
@@ -100,9 +105,7 @@ func (s *FocusReportSkill) Execute(ctx context.Context, input map[string]any) (a
 		case "gcp":
 			report.Providers = append(report.Providers, s.fetchGCP(ctx, period))
 		case "oci":
-			report.Providers = append(report.Providers, notSupported("oci",
-				"OCI Usage API integration not yet wired",
-				"https://github.com/marciozampiron/multix/issues/46#oci"))
+			report.Providers = append(report.Providers, s.fetchOCI(ctx, period))
 		default:
 			report.Providers = append(report.Providers, notSupported(name,
 				"unknown provider", ""))
@@ -157,6 +160,37 @@ func (s *FocusReportSkill) fetchGCP(ctx context.Context, period string) cost.Pro
 
 	pr := cost.ProviderReport{
 		Provider:  "gcp",
+		Supported: true,
+		Rows:      rows,
+	}
+	for _, r := range rows {
+		pr.ProviderTotal += r.BilledCost
+	}
+	return pr
+}
+
+func (s *FocusReportSkill) fetchOCI(ctx context.Context, period string) cost.ProviderReport {
+	tenancyOCID := strings.TrimSpace(os.Getenv("MULTIX_OCI_TENANCY_OCID"))
+	if tenancyOCID == "" {
+		return cost.ProviderReport{
+			Provider:     "oci",
+			Supported:    true,
+			Reason:       "OCI Usage API not configured; set MULTIX_OCI_TENANCY_OCID=<tenancy_ocid>",
+			TrackedUnder: "https://github.com/marciozampiron/multix/issues/46#oci",
+		}
+	}
+
+	rows, err := s.ociUsageFetchFunc(ctx, tenancyOCID, period)
+	if err != nil {
+		return cost.ProviderReport{
+			Provider:  "oci",
+			Supported: true,
+			Reason:    fmt.Sprintf("OCI Usage API query failed: %v", err),
+		}
+	}
+
+	pr := cost.ProviderReport{
+		Provider:  "oci",
 		Supported: true,
 		Rows:      rows,
 	}
@@ -250,6 +284,46 @@ func (s *FocusReportSkill) defaultGCPBillingFetch(ctx context.Context, period st
 	return mapGCPBillingRowsToFocus(iter)
 }
 
+func (s *FocusReportSkill) defaultOCIUsageFetch(ctx context.Context, tenancyOCID, period string) ([]cost.FocusBillingRow, error) {
+	start, end, err := resolvePeriod(period, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := usageapi.NewUsageapiClientWithConfigurationProvider(common.DefaultConfigProvider())
+	if err != nil {
+		return nil, fmt.Errorf("failed to create OCI Usage API client: %w", err)
+	}
+
+	var summaries []usageapi.UsageSummary
+	var page *string
+	for {
+		response, err := client.RequestSummarizedUsages(ctx, usageapi.RequestSummarizedUsagesRequest{
+			RequestSummarizedUsagesDetails: usageapi.RequestSummarizedUsagesDetails{
+				TenantId:          common.String(tenancyOCID),
+				TimeUsageStarted:  &common.SDKTime{Time: start},
+				TimeUsageEnded:    &common.SDKTime{Time: end},
+				Granularity:       usageapi.RequestSummarizedUsagesDetailsGranularityMonthly,
+				QueryType:         usageapi.RequestSummarizedUsagesDetailsQueryTypeCost,
+				IsAggregateByTime: common.Bool(false),
+				GroupBy:           []string{"service", "region"},
+			},
+			Page:  page,
+			Limit: common.Int(1000),
+		})
+		if err != nil {
+			return nil, fmt.Errorf("RequestSummarizedUsages failed; ensure Cost and Usage Reports are enabled and usage-budgets read access is granted: %w", err)
+		}
+		summaries = append(summaries, response.Items...)
+		if response.OpcNextPage == nil || strings.TrimSpace(*response.OpcNextPage) == "" {
+			break
+		}
+		page = response.OpcNextPage
+	}
+
+	return mapOCIUsageRowsToFocus(summaries)
+}
+
 func mapCostExplorerToFocus(out *costexplorer.GetCostAndUsageOutput) []cost.FocusBillingRow {
 	if out == nil {
 		return nil
@@ -328,6 +402,30 @@ func mapGCPBillingRowsToFocus(iter gcpRowIterator) ([]cost.FocusBillingRow, erro
 	return rows, nil
 }
 
+func mapOCIUsageRowsToFocus(items []usageapi.UsageSummary) ([]cost.FocusBillingRow, error) {
+	var rows []cost.FocusBillingRow
+	for _, item := range items {
+		amount, err := ociUsageAmount(item)
+		if err != nil {
+			return nil, err
+		}
+		if amount == 0 {
+			continue
+		}
+		service := stringPtrValue(item.Service)
+		rows = append(rows, cost.FocusBillingRow{
+			BilledCost:       amount,
+			BillingPeriod:    sdkMonth(item.TimeUsageStarted),
+			ProviderName:     "OCI",
+			ChargeType:       "Usage",
+			ResourceCategory: categorizeOCIService(service),
+			ServiceName:      service,
+			Region:           stringPtrValue(item.Region),
+		})
+	}
+	return rows, nil
+}
+
 // categorizeAWSService maps the most common AWS service identifiers to
 // FOCUS resource categories. Unknown services fall through as "Other".
 func categorizeAWSService(service string) string {
@@ -372,6 +470,28 @@ func categorizeGCPService(service string) string {
 	}
 }
 
+// categorizeOCIService maps common Oracle Cloud billing services to FOCUS
+// resource categories. Unknown services fall through as "Other".
+func categorizeOCIService(service string) string {
+	s := strings.ToLower(service)
+	switch {
+	case strings.Contains(s, "compute") || strings.Contains(s, "container") ||
+		strings.Contains(s, "functions") || strings.Contains(s, "oke"):
+		return "Compute"
+	case strings.Contains(s, "object storage") || strings.Contains(s, "block volume") ||
+		strings.Contains(s, "file storage") || strings.Contains(s, "archive storage"):
+		return "Storage"
+	case strings.Contains(s, "vcn") || strings.Contains(s, "load balancer") ||
+		strings.Contains(s, "fastconnect") || strings.Contains(s, "data transfer"):
+		return "Network"
+	case strings.Contains(s, "database") || strings.Contains(s, "autonomous") ||
+		strings.Contains(s, "mysql") || strings.Contains(s, "exadata"):
+		return "Database"
+	default:
+		return "Other"
+	}
+}
+
 var bigQueryIdentifierRE = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 func parseBigQueryTable(value string) (string, string, error) {
@@ -400,6 +520,34 @@ func nullString(value bigquery.NullString) string {
 		return ""
 	}
 	return value.StringVal
+}
+
+func ociUsageAmount(item usageapi.UsageSummary) (float64, error) {
+	if item.ComputedAmount != nil {
+		return float64(*item.ComputedAmount), nil
+	}
+	if item.AttributedCost == nil || strings.TrimSpace(*item.AttributedCost) == "" {
+		return 0, nil
+	}
+	amount, err := strconv.ParseFloat(strings.TrimSpace(*item.AttributedCost), 64)
+	if err != nil {
+		return 0, fmt.Errorf("invalid OCI attributed cost %q: %w", *item.AttributedCost, err)
+	}
+	return amount, nil
+}
+
+func sdkMonth(value *common.SDKTime) string {
+	if value == nil || value.Time.IsZero() {
+		return ""
+	}
+	return value.Time.UTC().Format("2006-01")
+}
+
+func stringPtrValue(value *string) string {
+	if value == nil {
+		return ""
+	}
+	return *value
 }
 
 // resolvePeriod converts the input period token into start/end times in the
