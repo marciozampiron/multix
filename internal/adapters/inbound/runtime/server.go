@@ -12,8 +12,10 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 
@@ -30,19 +32,21 @@ type requestIDContextKey struct{}
 
 // Server represents the local MULTIX HTTP runtime.
 type Server struct {
-	logger logger.Logger
-	agent  *agent.ToolAdapter
-	mux    *http.ServeMux
-	port   int
+	logger  logger.Logger
+	agent   *agent.ToolAdapter
+	mux     *http.ServeMux
+	metrics *Metrics
+	port    int
 }
 
 // NewServer initializes a new runtime Server.
 func NewServer(logger logger.Logger, adapter *agent.ToolAdapter, port int) *Server {
 	s := &Server{
-		logger: logger,
-		agent:  adapter,
-		mux:    http.NewServeMux(),
-		port:   port,
+		logger:  logger,
+		agent:   adapter,
+		mux:     http.NewServeMux(),
+		metrics: NewMetrics(),
+		port:    port,
 	}
 	s.registerRoutes()
 	return s
@@ -54,6 +58,7 @@ func (s *Server) registerRoutes() {
 	s.mux.HandleFunc("GET /tools", s.withRequestContext(s.toolsHandler))
 	s.mux.HandleFunc("POST /execute", s.withRequestContext(s.executeHandler))
 	s.mux.HandleFunc("GET /capabilities", s.withRequestContext(s.capabilitiesHandler))
+	s.mux.HandleFunc("GET /metrics", s.withRequestContext(s.metricsHandler))
 }
 
 // healthHandler provides a basic liveness probe.
@@ -94,6 +99,15 @@ func (s *Server) toolsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	if err := json.NewEncoder(w).Encode(manifests); err != nil {
 		s.logger.Error("Failed to encode tool manifests", err)
+	}
+}
+
+// metricsHandler exposes Prometheus-compatible runtime metrics.
+func (s *Server) metricsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+	w.WriteHeader(http.StatusOK)
+	if _, err := w.Write([]byte(s.metrics.Prometheus())); err != nil {
+		s.logger.Error("Failed to write metrics response", err)
 	}
 }
 
@@ -158,6 +172,7 @@ func (s *Server) executeHandler(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
+		s.metrics.RecordSkillInvocation(req.Skill, "error")
 		s.logger.Error("Failed to execute tool", err, "skill", req.Skill, "request_id", RequestIDFromContext(r.Context()))
 
 		if strings.Contains(strings.ToLower(err.Error()), "not found") {
@@ -170,6 +185,7 @@ func (s *Server) executeHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	s.metrics.RecordSkillInvocation(req.Skill, "success")
 	w.WriteHeader(http.StatusOK)
 	resp := executeSuccessResponse{
 		Ok:       true,
@@ -180,6 +196,69 @@ func (s *Server) executeHandler(w http.ResponseWriter, r *http.Request) {
 	if err := json.NewEncoder(w).Encode(resp); err != nil {
 		s.logger.Error("Failed to encode execute response", err)
 	}
+}
+
+type metricKey struct {
+	skill  string
+	status string
+}
+
+// Metrics stores runtime counters exposed through the Prometheus text format.
+type Metrics struct {
+	mu               sync.Mutex
+	skillInvocations map[metricKey]int
+}
+
+// NewMetrics creates an empty runtime metrics store.
+func NewMetrics() *Metrics {
+	return &Metrics{skillInvocations: make(map[metricKey]int)}
+}
+
+// RecordSkillInvocation increments the skill invocation counter for a status.
+func (m *Metrics) RecordSkillInvocation(skill, status string) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.skillInvocations[metricKey{skill: skill, status: status}]++
+}
+
+// Prometheus renders the metrics store in Prometheus text exposition format.
+func (m *Metrics) Prometheus() string {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	var b strings.Builder
+	b.WriteString("# HELP multix_skill_invocations_total Total skill invocation attempts through the runtime execute endpoint.\n")
+	b.WriteString("# TYPE multix_skill_invocations_total counter\n")
+
+	keys := make([]metricKey, 0, len(m.skillInvocations))
+	for key := range m.skillInvocations {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].skill == keys[j].skill {
+			return keys[i].status < keys[j].status
+		}
+		return keys[i].skill < keys[j].skill
+	})
+
+	for _, key := range keys {
+		b.WriteString(`multix_skill_invocations_total{skill="`)
+		b.WriteString(escapeMetricLabel(key.skill))
+		b.WriteString(`",status="`)
+		b.WriteString(escapeMetricLabel(key.status))
+		b.WriteString(`"} `)
+		b.WriteString(strconv.Itoa(m.skillInvocations[key]))
+		b.WriteString("\n")
+	}
+
+	return b.String()
+}
+
+func escapeMetricLabel(value string) string {
+	value = strings.ReplaceAll(value, `\`, `\\`)
+	value = strings.ReplaceAll(value, "\n", `\n`)
+	return strings.ReplaceAll(value, `"`, `\"`)
 }
 
 // RequestIDFromContext returns the runtime request ID attached to ctx, if present.

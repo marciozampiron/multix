@@ -129,6 +129,29 @@ func TestToolsHandler(t *testing.T) {
 	}
 }
 
+func TestMetricsHandler(t *testing.T) {
+	log := logger.New("error")
+	s := NewServer(log, agent.NewToolAdapter(nil, nil), 8080)
+
+	req, err := http.NewRequest(http.MethodGet, "/metrics", nil)
+	if err != nil {
+		t.Fatalf("Failed to create request: %v", err)
+	}
+
+	rr := httptest.NewRecorder()
+	s.mux.ServeHTTP(rr, req)
+
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK, got %d", rr.Code)
+	}
+	if ctype := rr.Header().Get("Content-Type"); ctype != "text/plain; version=0.0.4; charset=utf-8" {
+		t.Fatalf("unexpected content type: %q", ctype)
+	}
+	if !strings.Contains(rr.Body.String(), "# TYPE multix_skill_invocations_total counter") {
+		t.Fatalf("expected prometheus metric type, got %s", rr.Body.String())
+	}
+}
+
 func TestExecuteHandler_Success(t *testing.T) {
 	log := logger.New("error")
 
@@ -208,6 +231,43 @@ func TestExecuteHandler_PropagatesRequestID(t *testing.T) {
 	}
 	if resultMap["echo_request_id"] != "req-test-123" || resultMap["context_request_id"] != "req-test-123" {
 		t.Fatalf("expected request ID in params and context, got %+v", resultMap)
+	}
+}
+
+func TestExecuteHandler_RecordsMetrics(t *testing.T) {
+	log := logger.New("error")
+
+	registry := domainSkills.NewRegistry()
+	registry.Register(&mockSkill{})
+	executor := appSkills.NewExecutor(registry)
+	adapter := agent.NewToolAdapter(registry, executor)
+
+	s := NewServer(log, adapter, 8080)
+
+	successReq, _ := http.NewRequest(http.MethodPost, "/execute", strings.NewReader(`{"skill": "test.skill", "provider": "aws", "params": {"key": "value"}}`))
+	successRR := httptest.NewRecorder()
+	s.mux.ServeHTTP(successRR, successReq)
+	if successRR.Code != http.StatusOK {
+		t.Fatalf("expected success execution, got %d: %s", successRR.Code, successRR.Body.String())
+	}
+
+	errorReq, _ := http.NewRequest(http.MethodPost, "/execute", strings.NewReader(`{"skill":"invalid.skill"}`))
+	errorRR := httptest.NewRecorder()
+	s.mux.ServeHTTP(errorRR, errorReq)
+	if errorRR.Code != http.StatusNotFound {
+		t.Fatalf("expected not found execution, got %d: %s", errorRR.Code, errorRR.Body.String())
+	}
+
+	metricsReq, _ := http.NewRequest(http.MethodGet, "/metrics", nil)
+	metricsRR := httptest.NewRecorder()
+	s.mux.ServeHTTP(metricsRR, metricsReq)
+
+	body := metricsRR.Body.String()
+	if !strings.Contains(body, `multix_skill_invocations_total{skill="test.skill",status="success"} 1`) {
+		t.Fatalf("expected success metric, got %s", body)
+	}
+	if !strings.Contains(body, `multix_skill_invocations_total{skill="invalid.skill",status="error"} 1`) {
+		t.Fatalf("expected error metric, got %s", body)
 	}
 }
 
