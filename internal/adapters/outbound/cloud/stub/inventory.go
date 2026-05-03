@@ -101,11 +101,15 @@ func inventoryFixtures() map[string][]*inventory.Resource {
 	return map[string][]*inventory.Resource{
 		"aws": {
 			newFixtureResource("i-0abc123", "123456789012", "us-east-1", "EC2", "prod-web-server", "RUNNING"),
+			newFixtureResource("i-0def456", "123456789012", "us-west-2", "EC2", "batch-worker-a", "STOPPED"),
 			newFixtureResource("bucket-prod-logs", "123456789012", "us-east-1", "S3", "prod-logs", "ACTIVE"),
+			newFixtureResource("bucket-audit-archive", "123456789012", "us-west-2", "S3", "audit-archive", "ACTIVE"),
 		},
 		"gcp": {
 			newFixtureResource("gce-prod-api", "demo-project", "us-central1", "computeEngine", "gce-prod-api", "RUNNING"),
+			newFixtureResource("gce-batch-worker", "demo-project", "us-east1", "computeEngine", "gce-batch-worker", "TERMINATED"),
 			newFixtureResource("gcs-backup-vault", "demo-project", "us-central1", "cloudStorage", "gcs-backup-vault", "ACTIVE"),
+			newFixtureResource("gcs-audit-archive", "demo-project", "us-east1", "cloudStorage", "gcs-audit-archive", "ACTIVE"),
 		},
 		"oci": {
 			newFixtureResource("ocid1.instance.oc1..stub", "ocid1.tenancy.oc1..stub", "us-ashburn-1", "Compute", "prod-web-server-oci", "RUNNING"),
