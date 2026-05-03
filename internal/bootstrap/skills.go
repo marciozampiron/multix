@@ -15,6 +15,7 @@ import (
 	"multix/internal/application/inventory"
 	"multix/internal/application/k8s"
 	"multix/internal/application/landingzone"
+	"multix/internal/application/network"
 	"multix/internal/application/security"
 	"multix/internal/domain/skills"
 	"multix/internal/ports/outbound"
@@ -33,12 +34,17 @@ func BuildSkillRegistry(providers outbound.ProviderRegistry) *skills.Registry {
 	// Landing zone & governance.
 	skillRegistry.Register(landingzone.NewAuditSkill(providers))
 
-	// Security posture.
+	// Security posture + AI-augmented audits.
 	skillRegistry.Register(security.NewIdentityPostureSkill(providers))
+	skillRegistry.Register(security.NewK8sAuditSkill(providers))
+	skillRegistry.Register(security.NewIAMAuditSkill(providers))
 
 	// Cost: quick_scan is a resource-count proxy; focus_report is FOCUS-aligned billing.
 	skillRegistry.Register(cost.NewQuickScanSkill(providers))
 	skillRegistry.Register(cost.NewFocusReportSkill(providers))
+
+	// Network — AI-driven topology generation.
+	skillRegistry.Register(network.NewGenerateNetworkSkill(providers))
 
 	// Authentication and identity.
 	skillRegistry.Register(auth.NewLoginSkill(providers))
