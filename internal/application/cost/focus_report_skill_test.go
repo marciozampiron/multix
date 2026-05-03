@@ -7,6 +7,7 @@ package cost
 import (
 	"context"
 	"errors"
+	"strings"
 	"testing"
 	"time"
 
@@ -37,6 +38,14 @@ func newSkillWithFakeAWS(rows []cost.FocusBillingRow, awsErr error) *FocusReport
 	return s
 }
 
+func newSkillWithFakeAWSAndGCP(awsRows, gcpRows []cost.FocusBillingRow, awsErr, gcpErr error) *FocusReportSkill {
+	s := newSkillWithFakeAWS(awsRows, awsErr)
+	s.gcpBillingFetchFunc = func(ctx context.Context, period string) ([]cost.FocusBillingRow, error) {
+		return gcpRows, gcpErr
+	}
+	return s
+}
+
 func TestFocusReport_AWSHappyPath(t *testing.T) {
 	rows := []cost.FocusBillingRow{
 		{BilledCost: 100, BillingPeriod: "2026-05", ProviderName: "AWS", ChargeType: "Usage", ResourceCategory: "Compute", ServiceName: "AmazonEC2", Region: "us-east-1"},
@@ -57,7 +66,8 @@ func TestFocusReport_AWSHappyPath(t *testing.T) {
 	}
 }
 
-func TestFocusReport_GCPAndOCIReturnNotSupported(t *testing.T) {
+func TestFocusReport_GCPRequiresBigQueryExportAndOCIReturnsNotSupported(t *testing.T) {
+	t.Setenv("MULTIX_GCP_BILLING_DATASET", "")
 	s := newSkillWithFakeAWS(nil, nil)
 
 	out, err := s.Execute(context.Background(), map[string]any{"providers": []any{"gcp", "oci"}})
@@ -68,16 +78,64 @@ func TestFocusReport_GCPAndOCIReturnNotSupported(t *testing.T) {
 	if len(report.Providers) != 2 {
 		t.Fatalf("expected 2 provider reports, got %d", len(report.Providers))
 	}
-	for _, p := range report.Providers {
-		if p.Supported {
-			t.Errorf("provider %s must be unsupported in v1, got Supported=true", p.Provider)
-		}
-		if p.Reason == "" || p.TrackedUnder == "" {
-			t.Errorf("provider %s missing reason/tracked_under: %+v", p.Provider, p)
-		}
+	gcp := report.Providers[0]
+	if !gcp.Supported {
+		t.Fatalf("gcp should remain supported but unconfigured, got %+v", gcp)
 	}
+	if !strings.Contains(gcp.Reason, "BigQuery export not configured") {
+		t.Fatalf("unexpected gcp configuration reason: %+v", gcp)
+	}
+
+	oci := report.Providers[1]
+	if oci.Supported {
+		t.Fatalf("oci must remain unsupported until OCI Usage API is wired, got %+v", oci)
+	}
+	if oci.Reason == "" || oci.TrackedUnder == "" {
+		t.Fatalf("oci missing reason/tracked_under: %+v", oci)
+	}
+
 	if report.GrandTotal != 0 {
 		t.Fatalf("GrandTotal should be 0 when only unsupported providers requested, got %v", report.GrandTotal)
+	}
+}
+
+func TestFocusReport_GCPHappyPath(t *testing.T) {
+	t.Setenv("MULTIX_GCP_BILLING_DATASET", "demo-project.billing_export.gcp_billing")
+	rows := []cost.FocusBillingRow{
+		{BilledCost: 80, BillingPeriod: "2026-05", ProviderName: "GCP", ChargeType: "Usage", ResourceCategory: "Compute", ServiceName: "Compute Engine", Region: "us-central1"},
+		{BilledCost: 20, BillingPeriod: "2026-05", ProviderName: "GCP", ChargeType: "Usage", ResourceCategory: "Storage", ServiceName: "Cloud Storage", Region: "us"},
+	}
+	s := newSkillWithFakeAWSAndGCP(nil, rows, nil, nil)
+
+	out, err := s.Execute(context.Background(), map[string]any{"providers": []any{"gcp"}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	report := out.(cost.FocusReport)
+	if report.GrandTotal != 100 {
+		t.Fatalf("expected GrandTotal=100, got %v", report.GrandTotal)
+	}
+	if len(report.Providers) != 1 || !report.Providers[0].Supported || report.Providers[0].ProviderTotal != 100 {
+		t.Fatalf("unexpected gcp provider report: %+v", report.Providers)
+	}
+}
+
+func TestFocusReport_GCPBigQueryError(t *testing.T) {
+	t.Setenv("MULTIX_GCP_BILLING_DATASET", "demo-project.billing_export.gcp_billing")
+	s := newSkillWithFakeAWSAndGCP(nil, nil, nil, errors.New("permission denied"))
+
+	out, _ := s.Execute(context.Background(), map[string]any{"providers": []any{"gcp"}})
+	report := out.(cost.FocusReport)
+	gcp := report.Providers[0]
+	if !gcp.Supported {
+		t.Fatal("gcp.Supported should remain true on BigQuery API errors")
+	}
+	if !strings.Contains(gcp.Reason, "permission denied") {
+		t.Fatalf("expected BigQuery error in reason, got %+v", gcp)
+	}
+	if len(gcp.Rows) != 0 {
+		t.Fatalf("expected zero rows on error, got %d", len(gcp.Rows))
 	}
 }
 
@@ -144,6 +202,51 @@ func TestCategorizeAWSService(t *testing.T) {
 		if got := categorizeAWSService(input); got != want {
 			t.Errorf("categorizeAWSService(%q) = %q; want %q", input, got, want)
 		}
+	}
+}
+
+func TestCategorizeGCPService(t *testing.T) {
+	cases := map[string]string{
+		"Compute Engine":       "Compute",
+		"Kubernetes Engine":    "Compute",
+		"Cloud Storage":        "Storage",
+		"Persistent Disk":      "Storage",
+		"Cloud Load Balancing": "Network",
+		"Cloud DNS":            "Network",
+		"Cloud SQL":            "Database",
+		"BigQuery":             "Database",
+		"Secret Manager":       "Other",
+	}
+	for input, want := range cases {
+		if got := categorizeGCPService(input); got != want {
+			t.Errorf("categorizeGCPService(%q) = %q; want %q", input, got, want)
+		}
+	}
+}
+
+func TestParseBigQueryTable(t *testing.T) {
+	project, table, err := parseBigQueryTable("demo-project.billing_export.gcp_billing")
+	if err != nil {
+		t.Fatalf("unexpected parse error: %v", err)
+	}
+	if project != "demo-project" || table != "demo-project.billing_export.gcp_billing" {
+		t.Fatalf("unexpected parsed table: project=%q table=%q", project, table)
+	}
+
+	if _, _, err := parseBigQueryTable("demo-project.billing_export"); err == nil {
+		t.Fatal("expected error for incomplete table ID")
+	}
+	if _, _, err := parseBigQueryTable("demo-project.billing_export.gcp_billing;DROP"); err == nil {
+		t.Fatal("expected error for unsafe table ID")
+	}
+}
+
+func TestNormalizeGCPBillingPeriod(t *testing.T) {
+	if got := normalizeGCPBillingPeriod("202605"); got != "2026-05" {
+		t.Fatalf("expected 2026-05, got %q", got)
+	}
+	if got := normalizeGCPBillingPeriod("2026-05"); got != "2026-05" {
+		t.Fatalf("expected existing period to pass through, got %q", got)
 	}
 }
 

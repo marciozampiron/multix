@@ -10,6 +10,8 @@ package cost
 import (
 	"context"
 	"fmt"
+	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -18,10 +20,12 @@ import (
 	"multix/internal/domain/skills"
 	"multix/internal/ports/outbound"
 
+	"cloud.google.com/go/bigquery"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/costexplorer"
 	cetypes "github.com/aws/aws-sdk-go-v2/service/costexplorer/types"
+	"google.golang.org/api/iterator"
 )
 
 const (
@@ -42,6 +46,8 @@ type FocusReportSkill struct {
 	providers outbound.ProviderRegistry
 	// awsCostFetchFunc is a testable seam for the Cost Explorer call.
 	awsCostFetchFunc func(ctx context.Context, period string) ([]cost.FocusBillingRow, error)
+	// gcpBillingFetchFunc is a testable seam for the BigQuery billing export call.
+	gcpBillingFetchFunc func(ctx context.Context, period string) ([]cost.FocusBillingRow, error)
 }
 
 // NewFocusReportSkill creates the skill wired with the default AWS Cost
@@ -49,13 +55,14 @@ type FocusReportSkill struct {
 func NewFocusReportSkill(pr outbound.ProviderRegistry) skills.Skill {
 	s := &FocusReportSkill{providers: pr}
 	s.awsCostFetchFunc = s.defaultAWSCostFetch
+	s.gcpBillingFetchFunc = s.defaultGCPBillingFetch
 	return s
 }
 
 func (s *FocusReportSkill) Name() string { return "cost.focus_report" }
 
 func (s *FocusReportSkill) Description() string {
-	return "Generates a FOCUS-aligned billing report. AWS uses Cost Explorer (real data); GCP and OCI return structured \"not yet supported\" envelopes pending their billing integrations."
+	return "Generates a FOCUS-aligned billing report. AWS uses Cost Explorer, GCP uses Cloud Billing BigQuery export, and OCI returns a structured pending-integration envelope."
 }
 
 func (s *FocusReportSkill) InputSchema() any {
@@ -91,9 +98,7 @@ func (s *FocusReportSkill) Execute(ctx context.Context, input map[string]any) (a
 		case "aws":
 			report.Providers = append(report.Providers, s.fetchAWS(ctx, period))
 		case "gcp":
-			report.Providers = append(report.Providers, notSupported("gcp",
-				"GCP Cloud Billing API integration not yet wired",
-				"https://github.com/marciozampiron/multix/issues/46#gcp"))
+			report.Providers = append(report.Providers, s.fetchGCP(ctx, period))
 		case "oci":
 			report.Providers = append(report.Providers, notSupported("oci",
 				"OCI Usage API integration not yet wired",
@@ -122,6 +127,36 @@ func (s *FocusReportSkill) fetchAWS(ctx context.Context, period string) cost.Pro
 	}
 	pr := cost.ProviderReport{
 		Provider:  "aws",
+		Supported: true,
+		Rows:      rows,
+	}
+	for _, r := range rows {
+		pr.ProviderTotal += r.BilledCost
+	}
+	return pr
+}
+
+func (s *FocusReportSkill) fetchGCP(ctx context.Context, period string) cost.ProviderReport {
+	if strings.TrimSpace(os.Getenv("MULTIX_GCP_BILLING_DATASET")) == "" {
+		return cost.ProviderReport{
+			Provider:     "gcp",
+			Supported:    true,
+			Reason:       "BigQuery export not configured; set MULTIX_GCP_BILLING_DATASET=<project>.<dataset>.<table>",
+			TrackedUnder: "https://github.com/marciozampiron/multix/issues/46#gcp",
+		}
+	}
+
+	rows, err := s.gcpBillingFetchFunc(ctx, period)
+	if err != nil {
+		return cost.ProviderReport{
+			Provider:  "gcp",
+			Supported: true,
+			Reason:    fmt.Sprintf("BigQuery billing export query failed: %v", err),
+		}
+	}
+
+	pr := cost.ProviderReport{
+		Provider:  "gcp",
 		Supported: true,
 		Rows:      rows,
 	}
@@ -171,6 +206,50 @@ func (s *FocusReportSkill) defaultAWSCostFetch(ctx context.Context, period strin
 	return mapCostExplorerToFocus(out), nil
 }
 
+func (s *FocusReportSkill) defaultGCPBillingFetch(ctx context.Context, period string) ([]cost.FocusBillingRow, error) {
+	tableID := strings.TrimSpace(os.Getenv("MULTIX_GCP_BILLING_DATASET"))
+	projectID, tableRef, err := parseBigQueryTable(tableID)
+	if err != nil {
+		return nil, err
+	}
+
+	start, end, err := resolvePeriod(period, time.Now().UTC())
+	if err != nil {
+		return nil, err
+	}
+
+	client, err := bigquery.NewClient(ctx, projectID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create BigQuery client: %w", err)
+	}
+	defer client.Close()
+
+	queryText := fmt.Sprintf(
+		"SELECT\n"+
+			"  service.description AS service,\n"+
+			"  location.region AS region,\n"+
+			"  SUM(cost) AS billed,\n"+
+			"  currency,\n"+
+			"  invoice.month AS billing_period\n"+
+			"FROM `%s`\n"+
+			"WHERE _PARTITIONTIME BETWEEN @start AND @end\n"+
+			"GROUP BY service, region, currency, billing_period\n",
+		tableRef,
+	)
+	query := client.Query(queryText)
+	query.Parameters = []bigquery.QueryParameter{
+		{Name: "start", Value: start},
+		{Name: "end", Value: end},
+	}
+
+	iter, err := query.Read(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("BigQuery read failed; ensure roles/bigquery.dataViewer is granted on the billing export dataset: %w", err)
+	}
+
+	return mapGCPBillingRowsToFocus(iter)
+}
+
 func mapCostExplorerToFocus(out *costexplorer.GetCostAndUsageOutput) []cost.FocusBillingRow {
 	if out == nil {
 		return nil
@@ -209,6 +288,46 @@ func mapCostExplorerToFocus(out *costexplorer.GetCostAndUsageOutput) []cost.Focu
 	return rows
 }
 
+type gcpBillingExportRow struct {
+	Service       bigquery.NullString  `bigquery:"service"`
+	Region        bigquery.NullString  `bigquery:"region"`
+	Billed        bigquery.NullFloat64 `bigquery:"billed"`
+	Currency      bigquery.NullString  `bigquery:"currency"`
+	BillingPeriod bigquery.NullString  `bigquery:"billing_period"`
+}
+
+type gcpRowIterator interface {
+	Next(dst any) error
+}
+
+func mapGCPBillingRowsToFocus(iter gcpRowIterator) ([]cost.FocusBillingRow, error) {
+	var rows []cost.FocusBillingRow
+	for {
+		var row gcpBillingExportRow
+		err := iter.Next(&row)
+		if err == iterator.Done {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if !row.Billed.Valid || row.Billed.Float64 == 0 {
+			continue
+		}
+		service := nullString(row.Service)
+		rows = append(rows, cost.FocusBillingRow{
+			BilledCost:       row.Billed.Float64,
+			BillingPeriod:    normalizeGCPBillingPeriod(nullString(row.BillingPeriod)),
+			ProviderName:     "GCP",
+			ChargeType:       "Usage",
+			ResourceCategory: categorizeGCPService(service),
+			ServiceName:      service,
+			Region:           nullString(row.Region),
+		})
+	}
+	return rows, nil
+}
+
 // categorizeAWSService maps the most common AWS service identifiers to
 // FOCUS resource categories. Unknown services fall through as "Other".
 func categorizeAWSService(service string) string {
@@ -228,6 +347,59 @@ func categorizeAWSService(service string) string {
 	default:
 		return "Other"
 	}
+}
+
+// categorizeGCPService maps common Google Cloud billing services to FOCUS
+// resource categories. Unknown services fall through as "Other".
+func categorizeGCPService(service string) string {
+	s := strings.ToLower(service)
+	switch {
+	case strings.Contains(s, "compute engine") || strings.Contains(s, "cloud run") ||
+		strings.Contains(s, "kubernetes engine") || strings.Contains(s, "app engine") ||
+		strings.Contains(s, "cloud functions"):
+		return "Compute"
+	case strings.Contains(s, "cloud storage") || strings.Contains(s, "persistent disk") ||
+		strings.Contains(s, "filestore"):
+		return "Storage"
+	case strings.Contains(s, "network") || strings.Contains(s, "load balancing") ||
+		strings.Contains(s, "cloud cdn") || strings.Contains(s, "cloud dns"):
+		return "Network"
+	case strings.Contains(s, "cloud sql") || strings.Contains(s, "spanner") ||
+		strings.Contains(s, "bigquery") || strings.Contains(s, "firestore"):
+		return "Database"
+	default:
+		return "Other"
+	}
+}
+
+var bigQueryIdentifierRE = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+func parseBigQueryTable(value string) (string, string, error) {
+	parts := strings.Split(strings.TrimSpace(value), ".")
+	if len(parts) != 3 {
+		return "", "", fmt.Errorf("MULTIX_GCP_BILLING_DATASET must use <project>.<dataset>.<table>")
+	}
+	for _, part := range parts {
+		if !bigQueryIdentifierRE.MatchString(part) {
+			return "", "", fmt.Errorf("invalid BigQuery billing export identifier %q", value)
+		}
+	}
+	return parts[0], strings.Join(parts, "."), nil
+}
+
+func normalizeGCPBillingPeriod(value string) string {
+	value = strings.TrimSpace(value)
+	if len(value) == 6 && strings.IndexFunc(value, func(r rune) bool { return r < '0' || r > '9' }) == -1 {
+		return value[:4] + "-" + value[4:]
+	}
+	return value
+}
+
+func nullString(value bigquery.NullString) string {
+	if !value.Valid {
+		return ""
+	}
+	return value.StringVal
 }
 
 // resolvePeriod converts the input period token into start/end times in the
