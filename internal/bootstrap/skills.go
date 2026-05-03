@@ -36,8 +36,9 @@ func BuildSkillRegistry(providers outbound.ProviderRegistry) *skills.Registry {
 	// Security posture.
 	skillRegistry.Register(security.NewIdentityPostureSkill(providers))
 
-	// Cost (quick proxy; full FOCUS report is #46).
+	// Cost: quick_scan is a resource-count proxy; focus_report is FOCUS-aligned billing.
 	skillRegistry.Register(cost.NewQuickScanSkill(providers))
+	skillRegistry.Register(cost.NewFocusReportSkill(providers))
 
 	// Authentication and identity.
 	skillRegistry.Register(auth.NewLoginSkill(providers))
