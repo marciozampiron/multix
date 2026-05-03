@@ -25,6 +25,9 @@ import (
 func BuildSkillRegistry(providers outbound.ProviderRegistry) *skills.Registry {
 	skillRegistry := skills.NewRegistry()
 
+	// FinOps
+	skillRegistry.Register(cost.NewFocusReportSkill(providers))
+
 	// Platform diagnostics.
 	skillRegistry.Register(doctor.NewCheckEnvSkill())
 	skillRegistry.Register(doctor.NewAuthSkill(providers))
