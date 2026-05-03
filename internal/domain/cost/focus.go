@@ -40,8 +40,8 @@ type ProviderReport struct {
 
 // FocusReport is the top-level payload of cost.focus_report.
 type FocusReport struct {
-	Currency  string           `json:"currency"`
-	Period    string           `json:"period"`
-	Providers []ProviderReport `json:"providers"`
-	GrandTotal float64         `json:"grand_total"`
+	Currency   string           `json:"currency"`
+	Period     string           `json:"period"`
+	Providers  []ProviderReport `json:"providers"`
+	GrandTotal float64          `json:"grand_total"`
 }
