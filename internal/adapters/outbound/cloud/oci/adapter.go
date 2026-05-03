@@ -28,12 +28,12 @@ import (
 
 // ociInstance is a minimal projection of a Compute instance for inventory output.
 type ociInstance struct {
-	ID            string
-	Name          string
-	Region        string
+	ID             string
+	Name           string
+	Region         string
 	LifecycleState string
-	FreeformTags  map[string]string
-	TimeCreated   time.Time
+	FreeformTags   map[string]string
+	TimeCreated    time.Time
 }
 
 // ociBucket is a minimal projection of an Object Storage bucket for inventory output.
@@ -221,14 +221,14 @@ func (a *adapter) Login(ctx context.Context, creds auth.Credentials) (*auth.Sess
 // Whoami returns the active OCI identity by inspecting the configuration provider.
 func (a *adapter) Whoami(ctx context.Context) (*auth.Identity, error) {
 	a.logger.Info("Retrieving OCI caller identity")
-	
+
 	cfg := a.cfgProviderFunc()
-	
+
 	tenancyID, err := cfg.TenancyOCID()
 	if err != nil {
 		return nil, fmt.Errorf("failed to retrieve OCI tenancy OCID: %w", err)
 	}
-	
+
 	userID, err := cfg.UserOCID()
 	if err != nil {
 		// In instance principal or resource principal scenarios, this might be empty
@@ -248,7 +248,7 @@ func (a *adapter) Whoami(ctx context.Context) (*auth.Identity, error) {
 // Validate validates OCI credentials by making a real API call to GetUser.
 func (a *adapter) Validate(ctx context.Context) (*auth.ValidationResult, error) {
 	a.logger.Info("Validating OCI credentials via Identity API")
-	
+
 	cfg := a.cfgProviderFunc()
 	client, err := a.identityClientFunc(cfg)
 	if err != nil {
