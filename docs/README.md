@@ -8,5 +8,6 @@ Welcome to the Multix internal documentation hub. This directory contains the ar
 - **`templates/`**: Boilerplate templates for new Go files.
 - **`skills/`**: The catalog of available skills and guidelines on creating new ones.
 - **`adr/`**: Architecture Decision Records detailing our evolution.
+- **`project-historical-resolution.md`**: Audit trail for Project items that were resolved before a PR was linked.
 
 Make sure to read these documents before submitting a pull request.
