@@ -13,6 +13,9 @@ import (
 
 	"multix/internal/domain/cost"
 	"multix/internal/ports/outbound"
+
+	"github.com/oracle/oci-go-sdk/v65/common"
+	"github.com/oracle/oci-go-sdk/v65/usageapi"
 )
 
 type stubRegistry struct{}
@@ -46,6 +49,14 @@ func newSkillWithFakeAWSAndGCP(awsRows, gcpRows []cost.FocusBillingRow, awsErr, 
 	return s
 }
 
+func newSkillWithFakeAWSGCPAndOCI(awsRows, gcpRows, ociRows []cost.FocusBillingRow, awsErr, gcpErr, ociErr error) *FocusReportSkill {
+	s := newSkillWithFakeAWSAndGCP(awsRows, gcpRows, awsErr, gcpErr)
+	s.ociUsageFetchFunc = func(ctx context.Context, tenancyOCID, period string) ([]cost.FocusBillingRow, error) {
+		return ociRows, ociErr
+	}
+	return s
+}
+
 func TestFocusReport_AWSHappyPath(t *testing.T) {
 	rows := []cost.FocusBillingRow{
 		{BilledCost: 100, BillingPeriod: "2026-05", ProviderName: "AWS", ChargeType: "Usage", ResourceCategory: "Compute", ServiceName: "AmazonEC2", Region: "us-east-1"},
@@ -66,8 +77,9 @@ func TestFocusReport_AWSHappyPath(t *testing.T) {
 	}
 }
 
-func TestFocusReport_GCPRequiresBigQueryExportAndOCIReturnsNotSupported(t *testing.T) {
+func TestFocusReport_GCPRequiresBigQueryExportAndOCIRequiresTenancyConfig(t *testing.T) {
 	t.Setenv("MULTIX_GCP_BILLING_DATASET", "")
+	t.Setenv("MULTIX_OCI_TENANCY_OCID", "")
 	s := newSkillWithFakeAWS(nil, nil)
 
 	out, err := s.Execute(context.Background(), map[string]any{"providers": []any{"gcp", "oci"}})
@@ -87,11 +99,11 @@ func TestFocusReport_GCPRequiresBigQueryExportAndOCIReturnsNotSupported(t *testi
 	}
 
 	oci := report.Providers[1]
-	if oci.Supported {
-		t.Fatalf("oci must remain unsupported until OCI Usage API is wired, got %+v", oci)
+	if !oci.Supported {
+		t.Fatalf("oci should remain supported but unconfigured, got %+v", oci)
 	}
-	if oci.Reason == "" || oci.TrackedUnder == "" {
-		t.Fatalf("oci missing reason/tracked_under: %+v", oci)
+	if !strings.Contains(oci.Reason, "OCI Usage API not configured") || oci.TrackedUnder == "" {
+		t.Fatalf("oci missing config reason/tracked_under: %+v", oci)
 	}
 
 	if report.GrandTotal != 0 {
@@ -139,6 +151,46 @@ func TestFocusReport_GCPBigQueryError(t *testing.T) {
 	}
 }
 
+func TestFocusReport_OCIHappyPath(t *testing.T) {
+	t.Setenv("MULTIX_OCI_TENANCY_OCID", "ocid1.tenancy.oc1..demo")
+	rows := []cost.FocusBillingRow{
+		{BilledCost: 70, BillingPeriod: "2026-05", ProviderName: "OCI", ChargeType: "Usage", ResourceCategory: "Compute", ServiceName: "Compute", Region: "sa-saopaulo-1"},
+		{BilledCost: 30, BillingPeriod: "2026-05", ProviderName: "OCI", ChargeType: "Usage", ResourceCategory: "Storage", ServiceName: "Object Storage", Region: "sa-saopaulo-1"},
+	}
+	s := newSkillWithFakeAWSGCPAndOCI(nil, nil, rows, nil, nil, nil)
+
+	out, err := s.Execute(context.Background(), map[string]any{"providers": []any{"oci"}})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	report := out.(cost.FocusReport)
+	if report.GrandTotal != 100 {
+		t.Fatalf("expected GrandTotal=100, got %v", report.GrandTotal)
+	}
+	if len(report.Providers) != 1 || !report.Providers[0].Supported || report.Providers[0].ProviderTotal != 100 {
+		t.Fatalf("unexpected oci provider report: %+v", report.Providers)
+	}
+}
+
+func TestFocusReport_OCIUsageAPIError(t *testing.T) {
+	t.Setenv("MULTIX_OCI_TENANCY_OCID", "ocid1.tenancy.oc1..demo")
+	s := newSkillWithFakeAWSGCPAndOCI(nil, nil, nil, nil, nil, errors.New("not authorized"))
+
+	out, _ := s.Execute(context.Background(), map[string]any{"providers": []any{"oci"}})
+	report := out.(cost.FocusReport)
+	oci := report.Providers[0]
+	if !oci.Supported {
+		t.Fatal("oci.Supported should remain true on Usage API errors")
+	}
+	if !strings.Contains(oci.Reason, "not authorized") {
+		t.Fatalf("expected Usage API error in reason, got %+v", oci)
+	}
+	if len(oci.Rows) != 0 {
+		t.Fatalf("expected zero rows on error, got %d", len(oci.Rows))
+	}
+}
+
 func TestFocusReport_AWSError(t *testing.T) {
 	s := newSkillWithFakeAWS(nil, errors.New("AccessDenied: ce:GetCostAndUsage not allowed"))
 
@@ -157,6 +209,8 @@ func TestFocusReport_AWSError(t *testing.T) {
 }
 
 func TestFocusReport_DefaultProvidersAndPeriod(t *testing.T) {
+	t.Setenv("MULTIX_GCP_BILLING_DATASET", "")
+	t.Setenv("MULTIX_OCI_TENANCY_OCID", "")
 	s := newSkillWithFakeAWS(nil, nil)
 	out, _ := s.Execute(context.Background(), map[string]any{})
 	report := out.(cost.FocusReport)
@@ -224,6 +278,25 @@ func TestCategorizeGCPService(t *testing.T) {
 	}
 }
 
+func TestCategorizeOCIService(t *testing.T) {
+	cases := map[string]string{
+		"Compute":              "Compute",
+		"Container Engine OKE": "Compute",
+		"Object Storage":       "Storage",
+		"Block Volume":         "Storage",
+		"VCN":                  "Network",
+		"Load Balancer":        "Network",
+		"Autonomous Database":  "Database",
+		"MySQL HeatWave":       "Database",
+		"Notifications":        "Other",
+	}
+	for input, want := range cases {
+		if got := categorizeOCIService(input); got != want {
+			t.Errorf("categorizeOCIService(%q) = %q; want %q", input, got, want)
+		}
+	}
+}
+
 func TestParseBigQueryTable(t *testing.T) {
 	project, table, err := parseBigQueryTable("demo-project.billing_export.gcp_billing")
 	if err != nil {
@@ -238,6 +311,40 @@ func TestParseBigQueryTable(t *testing.T) {
 	}
 	if _, _, err := parseBigQueryTable("demo-project.billing_export.gcp_billing;DROP"); err == nil {
 		t.Fatal("expected error for unsafe table ID")
+	}
+}
+
+func TestMapOCIUsageRowsToFocus(t *testing.T) {
+	amount := float32(42.5)
+	attributedCost := "7.25"
+	service := "Object Storage"
+	region := "us-ashburn-1"
+
+	rows, err := mapOCIUsageRowsToFocus([]usageapi.UsageSummary{
+		{
+			TimeUsageStarted: &common.SDKTime{Time: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)},
+			Service:          common.String("Compute"),
+			Region:           common.String(region),
+			ComputedAmount:   &amount,
+		},
+		{
+			TimeUsageStarted: &common.SDKTime{Time: time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)},
+			Service:          common.String(service),
+			AttributedCost:   common.String(attributedCost),
+		},
+		{},
+	})
+	if err != nil {
+		t.Fatalf("unexpected map error: %v", err)
+	}
+	if len(rows) != 2 {
+		t.Fatalf("expected 2 rows, got %d", len(rows))
+	}
+	if rows[0].BilledCost != 42.5 || rows[0].BillingPeriod != "2026-05" || rows[0].Region != region {
+		t.Fatalf("unexpected computed amount row: %+v", rows[0])
+	}
+	if rows[1].BilledCost != 7.25 || rows[1].ServiceName != service || rows[1].ResourceCategory != "Storage" {
+		t.Fatalf("unexpected attributed cost row: %+v", rows[1])
 	}
 }
 
