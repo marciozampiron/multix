@@ -25,10 +25,11 @@ func TestScanSkillWithCloudStubs(t *testing.T) {
 		service  string
 		wantType string
 		wantName string
+		want     int
 	}{
-		{provider: "aws", service: "compute", wantType: "EC2", wantName: "prod-web-server"},
-		{provider: "gcp", service: "compute", wantType: "computeEngine", wantName: "gce-prod-api"},
-		{provider: "oci", service: "compute", wantType: "Compute", wantName: "prod-web-server-oci"},
+		{provider: "aws", service: "compute", wantType: "EC2", wantName: "prod-web-server", want: 2},
+		{provider: "gcp", service: "compute", wantType: "computeEngine", wantName: "gce-prod-api", want: 2},
+		{provider: "oci", service: "compute", wantType: "Compute", wantName: "prod-web-server-oci", want: 1},
 	}
 
 	for _, tt := range tests {
@@ -42,8 +43,8 @@ func TestScanSkillWithCloudStubs(t *testing.T) {
 			}
 
 			payload := result.(map[string]any)
-			if payload["count"] != 1 {
-				t.Fatalf("expected one scanned resource, got %+v", payload)
+			if payload["count"] != tt.want {
+				t.Fatalf("expected %d scanned resources, got %+v", tt.want, payload)
 			}
 
 			resources := payload["resources"].([]map[string]any)
@@ -66,7 +67,11 @@ func TestSummarySkillWithCloudStubs(t *testing.T) {
 			}
 
 			payload := result.(map[string]any)
-			if payload["provider"] != provider || payload["total_count"] != 2 {
+			wantTotal := 2
+			if provider == "aws" || provider == "gcp" {
+				wantTotal = 4
+			}
+			if payload["provider"] != provider || payload["total_count"] != wantTotal {
 				t.Fatalf("unexpected summary payload: %+v", payload)
 			}
 

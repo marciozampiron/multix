@@ -30,6 +30,11 @@ Typical safe workflow:
    - `make tidy`
 5. if security-sensitive:
    - `make vuln`
+6. commit changes on a focused branch
+7. open a GitHub pull request before considering the activity delivered
+
+See also:
+- `.agent/PULL_REQUESTS.md`
 
 ---
 

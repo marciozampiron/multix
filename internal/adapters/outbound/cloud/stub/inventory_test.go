@@ -18,10 +18,13 @@ func TestInventoryProviderFixtures(t *testing.T) {
 		computeType  string
 		storageType  string
 		expectedName string
+		computeCount int
+		storageCount int
+		totalCount   int
 	}{
-		{provider: "aws", computeType: "EC2", storageType: "S3", expectedName: "prod-web-server"},
-		{provider: "gcp", computeType: "computeEngine", storageType: "cloudStorage", expectedName: "gce-prod-api"},
-		{provider: "oci", computeType: "Compute", storageType: "Bucket", expectedName: "prod-web-server-oci"},
+		{provider: "aws", computeType: "EC2", storageType: "S3", expectedName: "prod-web-server", computeCount: 2, storageCount: 2, totalCount: 4},
+		{provider: "gcp", computeType: "computeEngine", storageType: "cloudStorage", expectedName: "gce-prod-api", computeCount: 2, storageCount: 2, totalCount: 4},
+		{provider: "oci", computeType: "Compute", storageType: "Bucket", expectedName: "prod-web-server-oci", computeCount: 1, storageCount: 1, totalCount: 2},
 	}
 
 	for _, tt := range tests {
@@ -36,7 +39,7 @@ func TestInventoryProviderFixtures(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected compute list error: %v", err)
 			}
-			if len(compute) != 1 || compute[0].Type != tt.computeType || compute[0].Name != tt.expectedName {
+			if len(compute) != tt.computeCount || compute[0].Type != tt.computeType || compute[0].Name != tt.expectedName {
 				t.Fatalf("unexpected compute resources: %+v", compute)
 			}
 
@@ -44,7 +47,7 @@ func TestInventoryProviderFixtures(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected storage list error: %v", err)
 			}
-			if len(storage) != 1 || storage[0].Type != tt.storageType {
+			if len(storage) != tt.storageCount || storage[0].Type != tt.storageType {
 				t.Fatalf("unexpected storage resources: %+v", storage)
 			}
 
@@ -52,10 +55,10 @@ func TestInventoryProviderFixtures(t *testing.T) {
 			if err != nil {
 				t.Fatalf("unexpected scan error: %v", err)
 			}
-			if summary.ProviderName != tt.provider || summary.Total != 2 {
+			if summary.ProviderName != tt.provider || summary.Total != tt.totalCount {
 				t.Fatalf("unexpected summary: %+v", summary)
 			}
-			if summary.CountByType[tt.computeType] != 1 || summary.CountByType[tt.storageType] != 1 {
+			if summary.CountByType[tt.computeType] != tt.computeCount || summary.CountByType[tt.storageType] != tt.storageCount {
 				t.Fatalf("unexpected summary counts: %+v", summary.CountByType)
 			}
 		})

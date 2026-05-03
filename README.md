@@ -1,5 +1,7 @@
 # MULTIX — AI-Native Multi-Cloud Skill Runtime
 
+[![CI](https://github.com/marciozampiron/multix/actions/workflows/ci.yml/badge.svg)](https://github.com/marciozampiron/multix/actions/workflows/ci.yml)
+
 ## 1. Title + Tagline
 
 Enterprise-grade multi-cloud operations for humans, command-line workflows, and AI agents.
