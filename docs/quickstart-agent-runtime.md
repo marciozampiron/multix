@@ -1,10 +1,10 @@
-# Quickstart: Using the MULTIX Agent Runtime (v0.4-alpha)
+# Quickstart: Using the MULTIX Agent Runtime
 
-This is the practical quickstart guide for local developers, shell users, AI agent builders, and LLM tool orchestrators. 
+This is the practical quickstart guide for local developers, shell users, AI agent builders, and LLM tool orchestrators.
 
 ## Prerequisites
 
-- Go 1.22+ installed on your local machine (required for `net/http` method-aware routing patterns).
+- Go 1.25+ or the version declared in `go.mod`.
 - A buildable repository structure.
 - Supported providers (`aws`, `gcp`, `oci`) depend on locally configured credentials on the host machine. (e.g., OCI examples assume a valid `~/.oci/config`).
 
@@ -50,34 +50,56 @@ Discover the generic platform capabilities and connected providers.
 curl -s http://localhost:8080/capabilities
 ```
 
+### Metrics
+Scrape Prometheus text exposition metrics.
+```bash
+curl -s http://localhost:8080/metrics
+```
+
 ## Execute a skill manually
 
-### Example A — OCI auth validate
-Validates if your Oracle credentials work end-to-end.
+### Example A - AWS auth validate
+Validates if your AWS credentials work end-to-end.
 ```bash
 curl -s -X POST http://localhost:8080/execute \
   -H "Content-Type: application/json" \
+  -H "X-Request-ID: quickstart-auth-aws" \
   -d '{
     "skill": "auth.validate",
-    "provider": "oci",
-    "params": {
-      "profile": "DEFAULT"
-    }
+    "provider": "aws",
+    "params": {}
   }'
 ```
 
-### Example B — OCI auth whoami
+### Example B - OCI auth whoami
 Retrieves identifying user boundaries from the OCI profile.
 ```bash
 curl -s -X POST http://localhost:8080/execute \
   -H "Content-Type: application/json" \
+  -H "X-Request-ID: quickstart-whoami-oci" \
   -d '{
     "skill": "auth.whoami",
     "provider": "oci"
   }'
 ```
 
-### Example C — unknown skill
+### Example C - cost.focus_report for unconfigured GCP
+This shows the supported-but-unconfigured envelope when Cloud Billing BigQuery export is not configured.
+```bash
+curl -s -X POST http://localhost:8080/execute \
+  -H "Content-Type: application/json" \
+  -H "X-Request-ID: quickstart-cost-gcp" \
+  -d '{
+    "skill": "cost.focus_report",
+    "provider": "gcp",
+    "params": {
+      "providers": ["gcp"],
+      "period": "current_month"
+    }
+  }'
+```
+
+### Example D - unknown skill
 Displays the explicit 404 response payload when targeting a missing or hypothetical capability.
 ```bash
 curl -i -X POST http://localhost:8080/execute \
@@ -86,7 +108,7 @@ curl -i -X POST http://localhost:8080/execute \
     "skill": "non.existent.skill"
   }'
 ```
-*Expected behavior:* The HTTP response will strictly map to `404 Not Found` with the JSON `{"ok": false, "error": "skill not found"}`.
+Expected behavior: the HTTP response maps to `404 Not Found` with an error envelope.
 
 ## LLM / agent integration pattern
 
@@ -129,10 +151,10 @@ make smoke-oci
 - **OCI config missing or invalid:** The execution results in `ok: false` returning `bad configuration` or `failed to retrieve` in the JSON response payload payload.
 - **Unknown skill returns 404:** Check for typos in the `"skill": ""` parameter matching the exact dot-notation schema.
 - **Malformed JSON returns 400:** Make sure trailing commas or unquoted strings aren't polluting the JSON POST blob.
-- **Empty /tools result:** Usually denotes zero registered capabilities wired inside `internal/bootstrap/registry.go`.
+- **Empty /tools result:** Usually denotes zero registered capabilities wired inside `internal/bootstrap/skills.go`.
+- **GCP billing not configured:** Set `MULTIX_GCP_BILLING_DATASET=<project>.<dataset>.<table>`.
+- **OCI billing not configured:** Set `MULTIX_OCI_TENANCY_OCID=<tenancy_ocid>`.
 
 ## Stability note
 
-**v0.4-alpha**
-
-The current execution constraints and endpoint shapes are intentionally small and practical. The contract may evolve for distributed topologies later, but the current endpoints are considered the strict foundational reference for this milestone.
+The current local runtime endpoints are the practical reference surface for agent and tool-calling clients. The future MCP/plugin model is documented in ADR 0008 and remains implementation work under issue #20.
