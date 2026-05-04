@@ -122,25 +122,281 @@ make test-race
 git diff --check
 ```
 
-## 7. Current CLI Usage
+## 7. Command Reference
 
-Common global flags:
-- `--provider`
-- `--output [json|table]`
+Build once before running local examples:
 
-Provider values currently vary by skill:
-- Cloud providers: `aws`, `gcp`, `oci`
-- AI-specific provider values: `gemini`
+```bash
+make build
+```
 
-Real, validated auth commands:
+Global flags:
+
+- `--provider`, `-p`: target provider. Default: `aws`.
+- `--output`, `-o`: output format. Supported values: `json`, `table`.
+- `--log-level`, `-l`: log level. Supported values: `debug`, `info`, `warn`, `error`.
+
+Provider values:
+
+- Cloud providers: `aws`, `gcp`, `oci`.
+- AI provider: `gemini` is used by `ai.explain`.
+
+### Version
+
+```bash
+./build/multix version
+```
+
+Prints the current CLI version compiled into the binary.
+
+### Doctor
+
+```bash
+./build/multix doctor
+```
+
+Runs local readiness checks for tools and dependencies through the `doctor.run` skill.
+
+Runtime-only related skills:
+
+- `doctor.auth`: provider auth health summary.
+- `doctor.k8s`: managed Kubernetes health summary.
+
+Use them through `/execute`:
+
+```bash
+curl -s -X POST http://localhost:8080/execute \
+  -H "Content-Type: application/json" \
+  -d '{"skill":"doctor.auth","params":{"providers":["aws","gcp","oci"]}}'
+```
+
+```bash
+curl -s -X POST http://localhost:8080/execute \
+  -H "Content-Type: application/json" \
+  -d '{"skill":"doctor.k8s","params":{"providers":["aws","gcp","oci"]}}'
+```
+
+### Auth
 
 ```bash
 ./build/multix auth validate --provider aws --output json
-./build/multix auth whoami --provider aws --output table
 ./build/multix auth validate --provider gcp --output json
+./build/multix auth validate --provider oci --output json
+```
+
+Validates credentials for the selected provider through `auth.validate`.
+
+```bash
+./build/multix auth whoami --provider aws --output table
 ./build/multix auth whoami --provider gcp --output table
+./build/multix auth whoami --provider oci --output json
+```
+
+Displays the active identity for the selected provider through `auth.whoami`.
+
+Runtime-only related skill:
+
+- `auth.login`: login-oriented skill exposed through the registry.
+
+```bash
+curl -s -X POST http://localhost:8080/execute \
+  -H "Content-Type: application/json" \
+  -d '{"skill":"auth.login","provider":"aws","params":{}}'
+```
+
+### Inventory
+
+```bash
+./build/multix inventory list --provider aws --service compute --output json
+./build/multix inventory list --provider aws --service storage --output table
+./build/multix inventory list --provider gcp --service compute --output json
+./build/multix inventory list --provider gcp --service storage --output json
 ./build/multix inventory list --provider oci --service compute --output json
-./build/multix k8s clusters --provider aws --output json
+./build/multix inventory list --provider oci --service storage --output json
+```
+
+Runs `inventory.scan` for a provider and optional service/resource type.
+
+Runtime-only related skill:
+
+- `inventory.summary`: provider inventory summary.
+
+```bash
+curl -s -X POST http://localhost:8080/execute \
+  -H "Content-Type: application/json" \
+  -d '{"skill":"inventory.summary","params":{"provider":"aws"}}'
+```
+
+### Kubernetes
+
+```bash
+./build/multix k8s clusters --provider aws
+./build/multix k8s clusters --provider gcp
+./build/multix k8s clusters --provider oci
+```
+
+Lists managed clusters through `k8s.list_clusters`. The current CLI renderer prints a compact table-style line per cluster.
+
+### AI
+
+```bash
+./build/multix ai explain "Explain this IAM finding" --output json
+```
+
+Runs `ai.explain` using the Gemini provider path.
+
+### Runtime Server
+
+```bash
+./build/multix serve --port 8080
+```
+
+Starts the local HTTP runtime for agents and automation.
+
+Endpoints:
+
+```bash
+curl -s http://localhost:8080/health
+curl -s http://localhost:8080/tools
+curl -s http://localhost:8080/capabilities
+curl -s http://localhost:8080/metrics
+```
+
+Execute any registered skill:
+
+```bash
+curl -s -X POST http://localhost:8080/execute \
+  -H "Content-Type: application/json" \
+  -H "X-Request-ID: manual-test-001" \
+  -d '{
+    "skill": "auth.validate",
+    "provider": "aws",
+    "params": {}
+  }'
+```
+
+### Cost And FinOps
+
+`cost.quick_scan` is a fast resource-count proxy:
+
+```bash
+curl -s -X POST http://localhost:8080/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "skill": "cost.quick_scan",
+    "params": {
+      "providers": ["aws", "gcp", "oci"]
+    }
+  }'
+```
+
+`cost.focus_report` returns FOCUS-aligned billing rows:
+
+```bash
+curl -s -X POST http://localhost:8080/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "skill": "cost.focus_report",
+    "params": {
+      "providers": ["aws", "gcp", "oci"],
+      "period": "current_month"
+    }
+  }'
+```
+
+Provider prerequisites:
+
+- AWS: Cost Explorer permission for `ce:GetCostAndUsage`.
+- GCP: `MULTIX_GCP_BILLING_DATASET=<project>.<dataset>.<table>` and BigQuery billing export access.
+- OCI: `MULTIX_OCI_TENANCY_OCID=<tenancy_ocid>` and Usage API access.
+
+Supported periods:
+
+- `current_month`
+- `last_30_days`
+- `last_month`
+
+### Landing Zone
+
+`landingzone.audit` is exposed through the runtime:
+
+```bash
+curl -s -X POST http://localhost:8080/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "skill": "landingzone.audit",
+    "params": {
+      "providers": ["aws", "gcp", "oci"]
+    }
+  }'
+```
+
+### Security
+
+Identity posture:
+
+```bash
+curl -s -X POST http://localhost:8080/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "skill": "security.identity_posture",
+    "params": {
+      "providers": ["aws", "gcp", "oci"]
+    }
+  }'
+```
+
+Kubernetes audit:
+
+```bash
+curl -s -X POST http://localhost:8080/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "skill": "security.k8s_audit",
+    "params": {
+      "providers": ["aws", "gcp", "oci"],
+      "ai_provider": "gemini"
+    }
+  }'
+```
+
+IAM audit:
+
+```bash
+curl -s -X POST http://localhost:8080/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "skill": "security.iam_audit",
+    "params": {
+      "providers": ["aws", "gcp", "oci"],
+      "ai_provider": "gemini"
+    }
+  }'
+```
+
+### Infrastructure Generation
+
+`infra.generate_network` generates a network topology proposal through the AI provider:
+
+```bash
+curl -s -X POST http://localhost:8080/execute \
+  -H "Content-Type: application/json" \
+  -d '{
+    "skill": "infra.generate_network",
+    "params": {
+      "provider": "aws",
+      "ai_provider": "gemini",
+      "intent": "three-tier web application with public, private, and database subnets",
+      "region": "us-east-1",
+      "cidr": "10.0.0.0/16"
+    }
+  }'
+```
+
+Use `GET /tools` to inspect the exact input schema for every registered skill:
+
+```bash
+curl -s http://localhost:8080/tools
 ```
 
 ## 8. Local Auth Troubleshooting
